@@ -34,7 +34,7 @@ class AppListRepoUsageStats : AppListRepo {
             .mapValues { (pkg, stats) ->
                 AppInfo(
                     pkg,
-                    stats.map { it.lastTimeUsed }.reduce { a, b -> a + b },
+                    stats.maxOf { it.lastTimeUsed },
                     LongArray(7)
                 ).apply {
                     stats.forEach { stat ->

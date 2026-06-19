@@ -1,7 +1,5 @@
 plugins {
     id 'com.android.application'
-    id 'kotlin-android'
-    id 'kotlin-kapt'
     id 'com.google.android.gms.oss-licenses-plugin'
     id 'org.jetbrains.kotlin.plugin.compose' version "${kotlin_version}"
 }
@@ -9,12 +7,12 @@ plugins {
 android {
     namespace 'com.jujinkim.frequaw'
 
-    compileSdkVersion 35
+    compileSdk 36
 
     defaultConfig {
         applicationId "com.jujinkim.frequaw"
-        minSdkVersion 23
-        targetSdkVersion 35
+        minSdk 23
+        targetSdk 35
         versionCode 173
         versionName "1.73"
 
@@ -25,23 +23,32 @@ android {
         enabled = true
     }
 
+    signingConfigs {
+        release {
+            // LOCAL TEST keystore only — not for Play Store / production
+            storeFile file('../test-release.jks')
+            storePassword 'frequaw123'
+            keyAlias 'frequawtest'
+            keyPassword 'frequaw123'
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
     }
-    kotlinOptions {
-        jvmTarget = '1.8'
-    }
     buildFeatures {
         viewBinding true
         compose true
+        buildConfig true
     }
 
     bundle {
@@ -51,18 +58,26 @@ android {
     }
 }
 
+// AGP 9 built-in Kotlin: configure compiler via the kotlin extension
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8
+    }
+}
+
 dependencies {
 
     implementation "org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}"
-    implementation 'androidx.core:core-ktx:1.16.0'
-    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'androidx.core:core-ktx:1.16.0' // 1.17+ needs AGP 9.1 / compileSdk 37
+    implementation 'androidx.appcompat:appcompat:1.7.1'
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.1"
-    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'com.google.android.material:material:1.12.0' // 1.13+ needs compileSdk 36
     implementation 'androidx.preference:preference-ktx:1.2.1'
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
-    implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.9.0'
+    implementation 'androidx.lifecycle:lifecycle-livedata-ktx:2.9.0' // 2.11 needs AGP 9.1 / compileSdk 37
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.0'
-    implementation 'com.google.android.gms:play-services-oss-licenses:17.1.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-compose:2.9.0'
+    implementation 'com.google.android.gms:play-services-oss-licenses:17.1.0' // 17.5.1 requires minSdk 24
     implementation 'com.github.martin-stone:hsv-alpha-color-picker-android:3.0.1'
     implementation 'androidx.constraintlayout:constraintlayout:2.2.1'
     implementation 'com.google.code.gson:gson:2.11.0'
@@ -76,7 +91,7 @@ dependencies {
     // Material Design
     implementation("androidx.compose.material:material:${compose_version}")
     // Material design icons
-    implementation("androidx.compose.material:material-icons-core:1.7.8")
+    implementation("androidx.compose.material:material-icons-core:1.7.8") // last release; merged into material lib in 1.9
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     // Integration with observables
     implementation("androidx.compose.runtime:runtime-livedata:${compose_version}")

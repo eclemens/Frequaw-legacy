@@ -1,5 +1,7 @@
 package com.jujinkim.frequaw
 
+import android.appwidget.AppWidgetManager
+import android.content.Intent
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
@@ -15,7 +17,7 @@ class ExportImportHelper(val activity: MainActivity) {
 
     // Export result listener
     private val activityResultCreateDoc =
-        activity.registerForActivityResult(ActivityResultContracts.CreateDocument()) { uri ->
+        activity.registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
             try {
                 val output = activity.contentResolver.openOutputStream(uri!!)
                 output?.bufferedWriter().use { it?.write(Gson().toJson(FrequawDataHelper.load())) }
@@ -23,7 +25,7 @@ class ExportImportHelper(val activity: MainActivity) {
                     activity,
                     R.string.general_export_import_exported_done,
                     Toast.LENGTH_SHORT
-                )
+                ).show()
             } catch(e: Exception) {
                 Toast.makeText(
                     activity,
@@ -59,7 +61,7 @@ class ExportImportHelper(val activity: MainActivity) {
                                 activity,
                                 R.string.general_export_import_imported_done,
                                 Toast.LENGTH_SHORT
-                            )
+                            ).show()
 
                             // Save original widgetSettings to the new Data
                             FrequawDataHelper.load().widgetSettings.forEach {
@@ -73,9 +75,16 @@ class ExportImportHelper(val activity: MainActivity) {
                             // Save loaded data
                             FrequawDataHelper.save(frequawData)
 
-                            val intent = activity.intent
+                            // explicit restart with only trusted extras, not the received intent
+                            val widgetId = activity.intent.getIntExtra(
+                                AppWidgetManager.EXTRA_APPWIDGET_ID,
+                                AppWidgetManager.INVALID_APPWIDGET_ID
+                            )
+                            val restartIntent = Intent(activity, MainActivity::class.java).apply {
+                                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+                            }
                             activity.finish()
-                            activity.startActivity(intent)
+                            activity.startActivity(restartIntent)
                         } else {
                             throw Exception()
                         }

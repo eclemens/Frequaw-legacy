@@ -48,6 +48,8 @@ object PermissionManager {
         return dialog
     }
 
+    // NOTE: getRunningServices is deprecated with no direct replacement; on O+ it still
+    // returns this app's own services, which is all we check. Warning left as a reminder.
     fun isServiceRunning(context: Context): Boolean {
         val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         for (service in manager.getRunningServices(Int.MAX_VALUE)) {
@@ -82,6 +84,8 @@ object PermissionManager {
         dialog.show()
     }
 
+    // NOTE: checkOpNoThrow / unsafeCheckOpNoThrow are deprecated with no non-deprecated
+    // equivalent usable at minSdk 23. Warnings left as a reminder.
     fun isUsageStatsAllowed(context: Context): Boolean {
         val manager = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

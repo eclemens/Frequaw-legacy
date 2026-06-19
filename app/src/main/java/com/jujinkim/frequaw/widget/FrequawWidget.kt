@@ -99,7 +99,6 @@ class FrequawWidget : AppWidgetProvider() {
 
         // Set progress gone
         views.setViewVisibility(R.id.progress_loading, View.GONE)
-        appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.widget)
         appWidgetManager.updateAppWidget(appWidgetId, views)
 
 
@@ -126,9 +125,9 @@ class FrequawWidget : AppWidgetProvider() {
 
         val updatePendingIntent = PendingIntent.getBroadcast(
             context,
-            0,
+            widgetId,
             updateIntent,
-            PendingIntent.FLAG_IMMUTABLE)
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         views.setOnClickPendingIntent(R.id.tv_updateTime, updatePendingIntent)
 
         // check Frequaw is available or not (Accessibility service or Usage stats permission)
@@ -154,7 +153,7 @@ class FrequawWidget : AppWidgetProvider() {
             val intent = Intent(context, MainActivity::class.java).apply {
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
             }
-            val pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+            val pendingIntent = PendingIntent.getActivity(context, widgetId, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
             views.setOnClickPendingIntent(R.id.iv_error, pendingIntent)
         }
 
@@ -286,7 +285,6 @@ class FrequawWidget : AppWidgetProvider() {
                     SortingDirection.RightTop ->  { x == colRange.first && y == rowRange.last}
                     SortingDirection.LeftBottom -> { x == colRange.last && y == rowRange.first }
                     SortingDirection.RightBottom -> { x == colRange.first && y == rowRange.first }
-                    else -> { x == colRange.last && y == rowRange.last }
                 }
                 if (isLastItem) {
                     val mode = setting.sortAppBy
@@ -310,9 +308,9 @@ class FrequawWidget : AppWidgetProvider() {
                         }
                         val pendingIntent = PendingIntent.getActivity(
                             context,
-                            0,
+                            widgetId * 1000 + index,
                             intent,
-                            PendingIntent.FLAG_IMMUTABLE
+                            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                         )
                         iconView.setOnClickPendingIntent(R.id.appIcon_container, pendingIntent)
                         linearLayout.addView(R.id.appIconRow, iconView)
@@ -365,9 +363,9 @@ class FrequawWidget : AppWidgetProvider() {
 
                             val pendingIntent = PendingIntent.getActivity(
                                 context,
-                                0,
+                                widgetId * 1000 + index,
                                 launchIntent,
-                                PendingIntent.FLAG_IMMUTABLE)
+                                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
                             setOnClickPendingIntent(R.id.appIcon_container, pendingIntent)
 
                         }

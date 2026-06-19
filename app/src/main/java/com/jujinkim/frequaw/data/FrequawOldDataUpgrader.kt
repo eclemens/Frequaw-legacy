@@ -79,14 +79,14 @@ object FrequawOldDataUpgrader {
                     when (split.size) {
                         3 -> {
                             pkgName = split[2]
-                            lastLaunched = split[1].toLong()
-                            launchedCnt.fill((split[0].toLong() / AppInfo.launchedCountsBy30mSize.toFloat()).roundToLong())
+                            lastLaunched = split[1].toLongOrNull() ?: 0L
+                            launchedCnt.fill((((split[0].toLongOrNull() ?: 0L)) / AppInfo.launchedCountsBy30mSize.toFloat()).roundToLong())
                         }
                         4 -> {
                             pkgName = split[3]
-                            lastLaunched = split[2].toLong()
+                            lastLaunched = split[2].toLongOrNull() ?: 0L
                             split[1].split(',').forEachIndexed { index, s ->
-                                launchedCnt[index] = s.toLong()
+                                if (index < launchedCnt.size) launchedCnt[index] = s.toLongOrNull() ?: 0L
                             }
                         }
                         else -> {
@@ -329,14 +329,14 @@ object FrequawOldDataUpgrader {
                 when (split.size) {
                     3 -> {
                         pkgName = split[2]
-                        lastLaunched = split[1].toLong()
-                        launchedCnt.fill((split[0].toLong() / AppInfo.launchedCountsBy30mSize.toFloat()).roundToLong())
+                        lastLaunched = split[1].toLongOrNull() ?: 0L
+                        launchedCnt.fill((((split[0].toLongOrNull() ?: 0L)) / AppInfo.launchedCountsBy30mSize.toFloat()).roundToLong())
                     }
                     4 -> {
                         pkgName = split[3]
-                        lastLaunched = split[2].toLong()
+                        lastLaunched = split[2].toLongOrNull() ?: 0L
                         split[1].split(',').forEachIndexed { index, s ->
-                            launchedCnt[index] = s.toLong()
+                            if (index < launchedCnt.size) launchedCnt[index] = s.toLongOrNull() ?: 0L
                         }
                     }
                     else -> {

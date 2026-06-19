@@ -144,7 +144,7 @@ private fun RadioButtonIconText(
         .padding(4.dp),
     verticalAlignment = Alignment.CenterVertically
 ) {
-    CompositionLocalProvider(LocalMinimumTouchTargetEnforcement provides false) {
+    CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
         RadioButton(
             selected = selected,
             onClick = onClick

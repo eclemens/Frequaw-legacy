@@ -10,7 +10,8 @@ So, keep the original structure of FrequawData, and restore from obfuscated save
  */
 
 data class FrequawV1ObfuscatedData(
-    @SerializedName("a") val appInfos: MutableList<FrequawAppInfoData> = mutableListOf(),
+    // nullable: Gson can deserialize a missing/explicit-null "a" field as null
+    @SerializedName("a") val appInfos: MutableList<FrequawAppInfoData>? = mutableListOf(),
     @SerializedName("b") val widgetSettings: HashMap<Int, FrequawWidgetSettingData> = HashMap(),
     @SerializedName("c") var isProMode: Boolean,
     @SerializedName("d") var homeLauncherPackageName: String

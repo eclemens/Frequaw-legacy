@@ -8,7 +8,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.core.content.ContextCompat.startActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jujinkim.frequaw.*
 import com.jujinkim.frequaw.data.FrequawData
@@ -125,7 +124,7 @@ fun SettingsGeneralComposable(
             SettingListItemDescriptionComposable(
                 text = stringResource(R.string.general_tutorial),
             ) {
-                startActivity(context, Intent(context, TutorialActivity::class.java), null)
+                context.startActivity(Intent(context, TutorialActivity::class.java))
             }
         }
     }

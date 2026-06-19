@@ -93,7 +93,8 @@ data class AppInfo(
         fun fromData(data: FrequawAppInfoData) = AppInfo(
             data.packageName,
             data.lastLaunched,
-            data.launchedCount.toLongArray()
+            // normalize to fixed size; persisted data may be shorter/longer
+            LongArray(launchedCountsBy30mSize) { i -> data.launchedCount.getOrElse(i) { 0L } }
         )
     }
 }

@@ -13,3 +13,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# local test signing keystore (do not commit)
+test-release.jks

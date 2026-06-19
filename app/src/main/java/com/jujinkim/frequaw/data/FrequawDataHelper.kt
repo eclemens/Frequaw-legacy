@@ -121,8 +121,9 @@ object FrequawDataHelper {
 
     private fun upgradeVersion1to2(data: FrequawData) {
         data.widgetSettings.values.forEach { setting ->
-            if (setting.recommendSortMode == null) {
-                setting.recommendSortMode = RcmdSortMode.Balanced
+            // check the nullable backing field; the public getter already defaults to Balanced
+            if (setting._recommendSortMode == null) {
+                setting._recommendSortMode = RcmdSortMode.Balanced
             }
         }
         if (data.dataVersion == 1) data.setVersion(2)

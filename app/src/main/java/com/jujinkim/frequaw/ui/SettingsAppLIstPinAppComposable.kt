@@ -191,7 +191,7 @@ private fun PinAppInfoComposable(
         maxLines = 1,
         overflow = TextOverflow.Ellipsis
     )
-    CompositionLocalProvider(LocalMinimumTouchTargetEnforcement provides false) {
+    CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
         IconButton(
             modifier = Modifier
                 .fillMaxHeight()

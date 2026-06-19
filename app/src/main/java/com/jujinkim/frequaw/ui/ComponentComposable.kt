@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -118,7 +118,7 @@ fun SettingListItemTextFieldComposable(
     placeHolder: String = "",
     onTextChanged: (String) -> Unit
 ) = SettingListItemComposable(text = text, description = description) {
-    var txt by remember { mutableStateOf(value) }
+    var txt by remember(value) { mutableStateOf(value) }
     TextField(
         modifier = Modifier.fillMaxWidth(),
         value = txt,
@@ -143,7 +143,7 @@ fun SettingListItemToggleComposable(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    var checkedState by remember { mutableStateOf(checked) }
+    var checkedState by remember(checked) { mutableStateOf(checked) }
 
     val modifier = Modifier.clickable {
         checkedState = !checkedState
@@ -162,7 +162,7 @@ fun SettingListItemToggleComposable(
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.body2
             )
-            CompositionLocalProvider(LocalMinimumTouchTargetEnforcement provides false) {
+            CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
                 Switch(checked = checkedState, onCheckedChange = {
                     checkedState = it
                     onCheckedChange(it)
@@ -181,7 +181,7 @@ fun SettingListItemDropdownComposable(
     onItemChanged: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    var selectedItem by remember { mutableStateOf(items[selectedKey]) }
+    var selectedItem by remember(selectedKey, items) { mutableStateOf(items[selectedKey]) }
 
     val modifier = Modifier.clickable { expanded = true }
 
@@ -221,7 +221,7 @@ fun SettingListItemSliderComposable(
     range: IntRange,
     onValueChange: (Int) -> Unit
 ) = SettingListItemComposable(text = text, description = description) {
-    var sliderValue by remember { mutableStateOf(value) }
+    var sliderValue by remember(value) { mutableIntStateOf(value) }
     Row {
         Slider(
             modifier = Modifier.weight(1f),
@@ -250,8 +250,8 @@ fun SettingListItemColorComposable(
     onColorChange: (Int) -> Unit
 ) {
     var openDialog by remember { mutableStateOf(false) }
-    var selectedColor by remember { mutableStateOf(Color(color)) }
-    var selectedColorString by remember { mutableStateOf(Integer.toHexString(color)) }
+    var selectedColor by remember(color) { mutableStateOf(Color(color)) }
+    var selectedColorString by remember(color) { mutableStateOf(Integer.toHexString(color)) }
     val modifier = Modifier.clickable { openDialog = true }
 
     SettingListItemComposable(text = text, modifier = modifier) {
@@ -367,7 +367,7 @@ fun SettingListItemPermissionCheckComposable(
             style = MaterialTheme.typography.body2
         )
         Spacer(modifier = Modifier.width(8.dp))
-        CompositionLocalProvider(LocalMinimumTouchTargetEnforcement provides false) {
+        CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
             Checkbox(isGranted, {})
         }
     }

@@ -54,25 +54,27 @@ class AppListRepoAccessibilityService : AppListRepo {
             val curHour = cal[Calendar.HOUR_OF_DAY]
             val curMinute = cal[Calendar.MINUTE]
             val idx30m = curDayOfWeek * 48 + curHour * 2 + curMinute / 30
-            appInfo.launchedCountsBy30m[idx30m] =
-                (appInfo.launchedCountsBy30m[idx30m] + 1).coerceAtMost(Long.MAX_VALUE)
+            if (idx30m < appInfo.launchedCountsBy30m.size) {
+                appInfo.launchedCountsBy30m[idx30m] =
+                    (appInfo.launchedCountsBy30m[idx30m] + 1).coerceAtMost(Long.MAX_VALUE)
+            }
 
-            // remove duplicated
-            apps.filter { info -> info.packageName == appInfo.packageName }
-                .takeIf { it.size >= 2 }
-                ?.forEachIndexed { index, unusedAppInfo ->
-                    if (index > 0) {
-                        // integrate two appInfo
-                        apps[0].lastLaunched = max(apps[0].lastLaunched, unusedAppInfo.lastLaunched)
-                        for (i in 0 until apps[0].launchedCountsBy30m.size) {
-                            if (i >= unusedAppInfo.launchedCountsBy30m.size) break
-                            apps[0].launchedCountsBy30m[i] =
-                                (apps[0].launchedCountsBy30m[i] + unusedAppInfo.launchedCountsBy30m[i])
-                                    .coerceAtMost(Long.MAX_VALUE)
-                        }
-                        apps.remove(unusedAppInfo)
+            // remove duplicated - merge every duplicate into the first kept instance
+            val duplicates = apps.filter { info -> info.packageName == appInfo.packageName }
+            if (duplicates.size >= 2) {
+                val keep = duplicates.first()
+                duplicates.drop(1).forEach { dup ->
+                    // integrate two appInfo
+                    keep.lastLaunched = max(keep.lastLaunched, dup.lastLaunched)
+                    for (i in 0 until keep.launchedCountsBy30m.size) {
+                        if (i >= dup.launchedCountsBy30m.size) break
+                        keep.launchedCountsBy30m[i] =
+                            (keep.launchedCountsBy30m[i] + dup.launchedCountsBy30m[i])
+                                .coerceAtMost(Long.MAX_VALUE)
                     }
+                    apps.remove(dup)
                 }
+            }
             Log.d(FrequawApp.TAG_DEBUG, "APP Updated: $packageName")
         }
 
@@ -81,26 +83,32 @@ class AppListRepoAccessibilityService : AppListRepo {
         lastUpdateTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
     }
 
-    private var isWaitToSaveAppList = false
+    private val saveHandler = Handler(Looper.getMainLooper())
+    @Volatile private var pendingApps: List<AppInfo>? = null
+    private val saveRunnable = Runnable {
+        val toSave = pendingApps ?: return@Runnable
+        pendingApps = null
+        FrequawDataHelper
+            .load()
+            .apply {
+                appInfos.clear()
+                appInfos.addAll(toSave.map { it.toData() })
+            }.run {
+                FrequawDataHelper.save(this)
+            }
+    }
     override fun saveAppList(apps: List<AppInfo>) {
-        if (isWaitToSaveAppList) return
-        isWaitToSaveAppList = true
-
-        Handler(Looper.getMainLooper()).postDelayed({
-            FrequawDataHelper
-                .load()
-                .apply {
-                    appInfos.clear()
-                    appInfos.addAll(apps.map { it.toData() })
-                }.run {
-                    FrequawDataHelper.save(this)
-                }
-            isWaitToSaveAppList = false
-            },1000  // don't save too frequently
-        )
+        // keep the latest snapshot, debounce, don't drop newer data
+        pendingApps = apps.toList()
+        saveHandler.removeCallbacks(saveRunnable)
+        saveHandler.postDelayed(saveRunnable, 1000) // don't save too frequently
     }
 
     override fun clearAppList() {
+        // drop any pending debounced save so it can't resurrect cleared data
+        saveHandler.removeCallbacks(saveRunnable)
+        pendingApps = null
+
         FrequawDataHelper
             .load()
             .apply {

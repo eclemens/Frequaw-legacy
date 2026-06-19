@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.NameNotFoundException
 import android.content.res.Resources
+import android.content.res.XmlResourceParser
 import android.graphics.*
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.BitmapDrawable
@@ -38,6 +39,11 @@ class IconHelper(context: Context, private val widgetId: Int) {
     private var cornerRadius: Float
 
     private val isForceApplyShape = widgetSetting.isForceIconShapeClip
+
+    // 4444 keeps RemoteViews bitmaps small (Binder transaction limit); 8888 only when the
+    // user opts into high quality, avoiding banding on adaptive gradient backgrounds.
+    private val iconConfig =
+        if (SharedPref.getUseOriginalQualityIcon()) Bitmap.Config.ARGB_8888 else Bitmap.Config.ARGB_4444
 
     private val iconPack: IconPack
 
@@ -81,43 +87,69 @@ class IconHelper(context: Context, private val widgetId: Int) {
         val iconBitmap = if (baseIcon is BitmapDrawable) {
             // old icons
             if (iconType != AppIconStyle.System && isForceApplyShape) {
-                getBitmapClipped(baseIcon.toBitmap(config = Bitmap.Config.ARGB_4444), iconType)
+                getBitmapClipped(baseIcon.toSquareBitmap(iconSize), iconType)
             } else {
-                baseIcon.toBitmap(config = Bitmap.Config.ARGB_4444)
+                baseIcon.toSquareBitmap(iconSize)
             }
         } else if (iconType == AppIconStyle.System || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            baseIcon.toBitmap(config = Bitmap.Config.ARGB_4444)
+            baseIcon.toSquareBitmap(iconSize)
         } else if (baseIcon is AdaptiveIconDrawable) {
-            val drr = arrayOfNulls<Drawable>(2)
-            drr[0] = baseIcon.background
-            drr[1] = baseIcon.foreground
-            val layerDrawable = LayerDrawable(drr).apply {
-                setLayerGravity(0, Gravity.CENTER)
-                setLayerGravity(1, Gravity.CENTER)
-                setLayerSize(0, layerSize, layerSize)
-                setLayerSize(1, layerSize, layerSize)
-                //setLayerInset(1, 0, 0, 0, 0)
+            // background and/or foreground may be null on real-world adaptive icons;
+            // a null layer in LayerDrawable crashes on draw, so keep only present layers.
+            val layers = listOfNotNull(baseIcon.background, baseIcon.foreground)
+            if (layers.isEmpty()) {
+                baseIcon.toSquareBitmap(iconSize)
+            } else {
+                val layerDrawable = LayerDrawable(layers.toTypedArray()).apply {
+                    layers.indices.forEach { i ->
+                        setLayerGravity(i, Gravity.CENTER)
+                        setLayerSize(i, layerSize, layerSize)
+                    }
+                }
+                val bitmap = Bitmap.createBitmap(iconSize, iconSize, iconConfig)
+                val canvas = Canvas(bitmap)
+                layerDrawable.setBounds(0, 0, iconSize, iconSize)
+                layerDrawable.draw(canvas)
+                getBitmapClipped(bitmap, iconType)
             }
-            val bitmap = Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_4444)
-            val canvas = Canvas(bitmap)
-            layerDrawable.setBounds(0, 0, iconSize, iconSize)
-            layerDrawable.draw(canvas)
-            getBitmapClipped(bitmap, iconType)
         } else {
             if (iconType != AppIconStyle.System && isForceApplyShape) {
-                getBitmapClipped(baseIcon.toBitmap(config = Bitmap.Config.ARGB_4444), iconType)
+                getBitmapClipped(baseIcon.toSquareBitmap(iconSize), iconType)
             } else {
-                baseIcon.toBitmap(config = Bitmap.Config.ARGB_4444)
+                baseIcon.toSquareBitmap(iconSize)
             }
         }
 
         return iconBitmap
     }
 
+    /**
+     * Render a drawable into a fixed square [size] canvas, scaled to fit and centered.
+     * Normalizes legacy / icon-pack / non-adaptive icons (which carry varying intrinsic
+     * sizes and aspect ratios) so every icon in the widget grid has the same dimensions
+     * and stays centered under fitCenter — no letterboxing, no shrunken icons.
+     */
+    private fun Drawable.toSquareBitmap(size: Int): Bitmap {
+        val bitmap = Bitmap.createBitmap(size, size, iconConfig)
+        val canvas = Canvas(bitmap)
+        val iw = if (intrinsicWidth > 0) intrinsicWidth else size
+        val ih = if (intrinsicHeight > 0) intrinsicHeight else size
+        val scale = min(size / iw.toFloat(), size / ih.toFloat())
+        val dw = (iw * scale).roundToInt()
+        val dh = (ih * scale).roundToInt()
+        val left = (size - dw) / 2
+        val top = (size - dh) / 2
+        setBounds(left, top, left + dw, top + dh)
+        draw(canvas)
+        return bitmap
+    }
+
     private fun getBitmapClipped(bitmap: Bitmap, iconType: AppIconStyle) : Bitmap {
         val width = bitmap.width
         val height = bitmap.height
-        val outputBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_4444).apply { density = bitmap.density }
+        // preserve source config so an 8888 (adaptive) bitmap isn't downgraded to 4444 banding
+        val outputBitmap = Bitmap.createBitmap(width, height, bitmap.config ?: Bitmap.Config.ARGB_8888)
+            .apply { density = bitmap.density }
         val path = when (iconType) {
             AppIconStyle.Circle-> circlePath(width, height)
             AppIconStyle.Square -> squarePath(width, height)
@@ -140,7 +172,7 @@ class IconHelper(context: Context, private val widgetId: Int) {
             addCircle(
                 width * .5f,
                 height * .5f,
-                min(width.toFloat(), height * .5f),
+                min(width, height) * .5f,
                 Path.Direction.CCW
             )
         }
@@ -197,13 +229,14 @@ class IconPack(
 
         // Get XmlPullParser from app filter xml
         val xmlPullParser: XmlPullParser
+        var appFilterStream: InputStream? = null
         try {
             iconPackRes = packageManager.getResourcesForApplication(packageName)
             val appFilterId = iconPackRes.getIdentifier("appfilter", "xml", packageName)
             if (appFilterId > 0) {
                 xmlPullParser = iconPackRes.getXml(appFilterId)
             } else {
-                val appFilterStream: InputStream = iconPackRes.getAssets().open("appfilter.xml")
+                appFilterStream = iconPackRes.getAssets().open("appfilter.xml")
 
                 val factory = XmlPullParserFactory.newInstance()
                 factory.isNamespaceAware = true
@@ -221,6 +254,7 @@ class IconPack(
         }
 
         // load icon drawable resource strings
+        try {
         var eventType = xmlPullParser.eventType
         do {
             if (eventType != XmlPullParser.START_TAG) {
@@ -288,6 +322,10 @@ class IconPack(
         } while (eventType != XmlPullParser.END_DOCUMENT)
 
         isReady = true
+        } finally {
+            runCatching { (xmlPullParser as? XmlResourceParser)?.close() }
+            runCatching { appFilterStream?.close() }
+        }
     }
 
     fun getAppIconDrawable(packageName: String) : Drawable? {

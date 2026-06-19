@@ -2,6 +2,7 @@ package com.jujinkim.frequaw.adapter
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.core.content.res.ResourcesCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.jujinkim.frequaw.FrequawApp
 import com.jujinkim.frequaw.R
@@ -39,7 +40,7 @@ class TutorialAdapter() : RecyclerView.Adapter<TutorialViewHolder>() {
 class TutorialViewHolder(
     private val binding: VhTutorialBinding) : RecyclerView.ViewHolder(binding.root) {
     fun bind(imgRes: Int, msg: String) {
-        binding.image = binding.root.resources.getDrawable(imgRes)
+        binding.image = ResourcesCompat.getDrawable(binding.root.resources, imgRes, null)
         binding.text = msg
     }
 }

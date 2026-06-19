@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.ui.platform.ViewCompositionStrategy
+import androidx.core.content.ContextCompat
 import androidx.databinding.DataBindingUtil
 import androidx.lifecycle.*
 import com.google.android.play.core.review.ReviewManagerFactory
@@ -195,10 +196,20 @@ class MainActivity : AppCompatActivity(), FinishActivityListener {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
-        this.intent = intent
+        if (intent == null) return
+
+        // rebuild an explicit intent with only trusted extras; never relaunch the received intent
+        val widgetId = intent.getIntExtra(
+            AppWidgetManager.EXTRA_APPWIDGET_ID,
+            AppWidgetManager.INVALID_APPWIDGET_ID
+        )
+        val safeIntent = Intent(this, MainActivity::class.java).apply {
+            putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+        }
+        this.intent = safeIntent
 
         finish()
-        startActivity(intent)
+        startActivity(safeIntent)
     }
 
     override fun onStop() {
@@ -326,7 +337,7 @@ class MainActivity : AppCompatActivity(), FinishActivityListener {
                                 LinearLayout.LayoutParams.MATCH_PARENT,
                                 1f
                             )
-                            setBackgroundColor(resources.getColor(R.color.preview_icon_area))
+                            setBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.preview_icon_area))
                             setPadding(
                                 widgetModel.iconHorizontalGap,
                                 widgetModel.iconVerticalGap,
@@ -339,7 +350,7 @@ class MainActivity : AppCompatActivity(), FinishActivityListener {
                                     LinearLayout.LayoutParams.MATCH_PARENT,
                                     LinearLayout.LayoutParams.MATCH_PARENT
                                 )
-                                setBackgroundColor(resources.getColor(R.color.preview_icon))
+                                setBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.preview_icon))
                             }
                             addView(icon)
                         }
