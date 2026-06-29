@@ -9,8 +9,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.jujinkim.frequaw.R
 import com.jujinkim.frequaw.Screen
+import com.jujinkim.frequaw.HorizontalDirection
 import com.jujinkim.frequaw.SortMode
-import com.jujinkim.frequaw.SortingDirection
+import com.jujinkim.frequaw.VerticalDirection
 import com.jujinkim.frequaw.data.FrequawData
 import com.jujinkim.frequaw.data.FrequawDataHelper
 import com.jujinkim.frequaw.viewmodel.SettingViewModel
@@ -39,6 +40,38 @@ fun SettingsAppListComposable(
             }
         }
 
+        // App sort direction - horizontal axis
+        item {
+            SettingListItemDropdownComposable(
+                text = stringResource(R.string.app_list_sort_direction_horizontal),
+                items = mapOf(
+                    HorizontalDirection.LeftToRight.name to stringResource(R.string.app_list_sort_direction_ltr),
+                    HorizontalDirection.RightToLeft.name to stringResource(R.string.app_list_sort_direction_rtl)
+                ),
+                selectedKey = widgetData.horizontalDirection.name,
+                onItemChanged = {
+                    widgetData.horizontalDirection = HorizontalDirection.valueOf(it)
+                    FrequawDataHelper.saveWidgetSetting(widgetData)
+                }
+            )
+        }
+
+        // App sort direction - vertical axis
+        item {
+            SettingListItemDropdownComposable(
+                text = stringResource(R.string.app_list_sort_direction_vertical),
+                items = mapOf(
+                    VerticalDirection.TopToBottom.name to stringResource(R.string.app_list_sort_direction_ttb),
+                    VerticalDirection.BottomToTop.name to stringResource(R.string.app_list_sort_direction_btt)
+                ),
+                selectedKey = widgetData.verticalDirection.name,
+                onItemChanged = {
+                    widgetData.verticalDirection = VerticalDirection.valueOf(it)
+                    FrequawDataHelper.saveWidgetSetting(widgetData)
+                }
+            )
+        }
+
         // App filter mode
         item {
             SettingListItemDescriptionComposable(
@@ -47,24 +80,6 @@ fun SettingsAppListComposable(
             ) {
                 viewModel.navigate(Screen.AppListFilterApp)
             }
-        }
-
-        // App sort direction
-        item {
-            SettingListItemDropdownComposable(
-                text = stringResource(R.string.app_list_sort_direction),
-                items = mapOf(
-                    SortingDirection.LeftTop.name to stringResource(R.string.app_list_sort_direction_lt),
-                    SortingDirection.RightTop.name to stringResource(R.string.app_list_sort_direction_rt),
-                    SortingDirection.LeftBottom.name to stringResource(R.string.app_list_sort_direction_lb),
-                    SortingDirection.RightBottom.name to stringResource(R.string.app_list_sort_direction_rb)
-                ),
-                selectedKey = widgetData.sortingDirection.name,
-                onItemChanged = {
-                    widgetData.sortingDirection = SortingDirection.valueOf(it)
-                    FrequawDataHelper.saveWidgetSetting(widgetData)
-                }
-            )
         }
 
         // Pin app

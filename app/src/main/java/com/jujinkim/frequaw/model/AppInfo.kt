@@ -70,6 +70,7 @@ data class AppInfo(
         }
 
         val index = dayOfWeek * 48 + hour * 2 + half
+        if (index >= launchedCountsBy30m.size) return -1
         return launchedCountsBy30m[index]
     }
 
@@ -90,10 +91,16 @@ data class AppInfo(
     companion object {
         const val launchedCountsBy30mSize = 24 * 2 * 7
 
-        fun fromData(data: FrequawAppInfoData) = AppInfo(
-            data.packageName,
-            data.lastLaunched,
-            data.launchedCount.toLongArray()
-        )
+        fun fromData(data: FrequawAppInfoData): AppInfo {
+            // Persisted/legacy data may carry a list of any length (e.g. default
+            // listOf(0), V1 sizes). Normalize to the fixed 336-slot array so the
+            // accessibility update path and getCountOf30m never index out of bounds.
+            val src = data.launchedCount
+            val normalized = LongArray(launchedCountsBy30mSize)
+            for (i in 0 until minOf(src.size, launchedCountsBy30mSize)) {
+                normalized[i] = src[i]
+            }
+            return AppInfo(data.packageName, data.lastLaunched, normalized)
+        }
     }
 }

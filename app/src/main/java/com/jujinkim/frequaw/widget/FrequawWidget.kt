@@ -50,6 +50,20 @@ class FrequawWidget : AppWidgetProvider() {
         }
     }
 
+    override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+        // Release per-widget state so deleted ids don't accumulate forever in the
+        // static SparseIntArrays / persisted widgetSettings map.
+        for (id in appWidgetIds) {
+            updatedMinWidths.delete(id)
+            updatedMaxWidths.delete(id)
+            updatedMinHeights.delete(id)
+            updatedMaxHeights.delete(id)
+            updateDuplicatePreventionFlags.delete(id)
+            FrequawDataHelper.eraseWidgetSetting(id)
+        }
+        super.onDeleted(context, appWidgetIds)
+    }
+
     override fun onEnabled(context: Context) {
         // Enter relevant functionality for when the first widget is created
     }
@@ -249,13 +263,13 @@ class FrequawWidget : AppWidgetProvider() {
 
         //Log.d(FrequawApp.TAG_DEBUG, appList.toString())
 
-        var rowRange: IntProgression = 0 until rowCount
-        var colRange: IntProgression = 0 until colCount
-        when (viewModel.appSortDirection) {
-            SortingDirection.LeftTop -> { rowRange = 0 until rowCount; colRange = 0 until colCount }
-            SortingDirection.RightTop -> { rowRange = 0 until rowCount; colRange = colCount - 1 downTo 0}
-            SortingDirection.LeftBottom -> { rowRange = rowCount - 1 downTo 0; colRange = 0 until colCount }
-            SortingDirection.RightBottom -> { rowRange = rowCount - 1 downTo 0; colRange = colCount - 1 downTo 0 }
+        val rowRange: IntProgression = when (viewModel.appVerticalDirection) {
+            VerticalDirection.TopToBottom -> 0 until rowCount
+            VerticalDirection.BottomToTop -> rowCount - 1 downTo 0
+        }
+        val colRange: IntProgression = when (viewModel.appHorizontalDirection) {
+            HorizontalDirection.LeftToRight -> 0 until colCount
+            HorizontalDirection.RightToLeft -> colCount - 1 downTo 0
         }
 
         val isHighQualityIcon = SharedPref.getUseOriginalQualityIcon()
@@ -281,13 +295,8 @@ class FrequawWidget : AppWidgetProvider() {
                 }
 
                 // if the last item, there is an error and no title bar, add error dot instead of icon
-                val isLastItem = when (viewModel.appSortDirection) {
-                    SortingDirection.LeftTop -> { x == colRange.last && y == rowRange.last }
-                    SortingDirection.RightTop ->  { x == colRange.first && y == rowRange.last}
-                    SortingDirection.LeftBottom -> { x == colRange.last && y == rowRange.first }
-                    SortingDirection.RightBottom -> { x == colRange.first && y == rowRange.first }
-                    else -> { x == colRange.last && y == rowRange.last }
-                }
+                // last item = highest index cell = bottom-right, independent of fill direction
+                val isLastItem = x == colCount - 1 && y == rowCount - 1
                 if (isLastItem) {
                     val mode = setting.sortAppBy
                     if(viewModel.titleVisibility == View.GONE &&
@@ -331,18 +340,34 @@ class FrequawWidget : AppWidgetProvider() {
                 val appInfo = appList[index]
                 val pm = context.packageManager
                 val packageName = appInfo.packageName
-                if (packageName.isEmpty()) continue
+                if (packageName.isEmpty()) {
+                    // keep grid alignment: still add the (empty) cell
+                    linearLayout.addView(R.id.appIconRow, iconView)
+                    continue
+                }
 
                 try {
-                    pm.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
-                        // Get Icon Bitmap
+                    val launchIntent = pm.getLaunchIntentForPackage(packageName)
+                    if (launchIntent == null) {
+                        // no launch intent: keep grid alignment with an empty cell
+                        linearLayout.addView(R.id.appIconRow, iconView)
+                        continue
+                    }
+                    run {
+                        // Get Icon Bitmap (cached across refreshes; see IconBitmapCache)
                         val iconStyle = setting.appIconStyle
-                        var iconBmp = iconHelper.getAppIcon(packageName, iconStyle)
                         val iconResize = (viewModel.iconSize * iconResizeFactor).toInt()
-                        if (iconBmp.width > iconResize || iconBmp.height > iconResize) {
-                            val finalIconBmp = iconBmp.resize(iconResize)
-                            iconBmp.recycle()
-                            iconBmp = finalIconBmp
+                        val cacheKey =
+                            "${setting.appIconPackPackage}|$packageName|${iconStyle.name}|" +
+                            "${setting.isForceIconShapeClip}|$iconResize"
+                        val iconBmp = IconBitmapCache.get(cacheKey) ?: run {
+                            var b = iconHelper.getAppIcon(packageName, iconStyle)
+                            if (b.width > iconResize || b.height > iconResize) {
+                                // resize() already recycles the (uncached) source bitmap internally
+                                b = b.resize(iconResize)
+                            }
+                            IconBitmapCache.put(cacheKey, b)
+                            b
                         }
 
                         // Get App Name
@@ -371,9 +396,11 @@ class FrequawWidget : AppWidgetProvider() {
                             setOnClickPendingIntent(R.id.appIcon_container, pendingIntent)
 
                         }
-                    } ?: continue
+                    }
                 } catch (e: PackageManager.NameNotFoundException) {
                     e.printStackTrace()
+                    // keep grid alignment with an empty cell
+                    linearLayout.addView(R.id.appIconRow, iconView)
                     continue
                 }
 

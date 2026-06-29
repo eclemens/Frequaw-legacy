@@ -143,7 +143,7 @@ fun SettingListItemToggleComposable(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    var checkedState by remember { mutableStateOf(checked) }
+    var checkedState by remember(checked) { mutableStateOf(checked) }
 
     val modifier = Modifier.clickable {
         checkedState = !checkedState

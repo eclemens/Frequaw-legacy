@@ -24,6 +24,12 @@
     <string name="app_list_sort_direction_rt">Topo Direito</string>
     <string name="app_list_sort_direction_lb">Inferior Esquerdo</string>
     <string name="app_list_sort_direction_rb">Inferior Direito</string>
+    <string name="app_list_sort_direction_horizontal">Direção horizontal</string>
+    <string name="app_list_sort_direction_vertical">Direção vertical</string>
+    <string name="app_list_sort_direction_ltr">Esquerda para direita</string>
+    <string name="app_list_sort_direction_rtl">Direita para esquerda</string>
+    <string name="app_list_sort_direction_ttb">Cima para baixo</string>
+    <string name="app_list_sort_direction_btt">Baixo para cima</string>
     <string name="app_list_show_zero_launched">Mostrar ícones de apps nunca abertos.</string>
     <string name="app_list_show_zero_launched_desc_on">Apps nunca abertos também aparecerão de vez em quando.</string>
     <string name="app_list_show_zero_launched_desc_off">Somente os apps mais usados serão mostrados.</string>

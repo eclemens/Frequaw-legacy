@@ -94,23 +94,26 @@ fun SettingsGeneralResetHistoryComposable(data: FrequawData) {
         }
 
         val items = remember { mutableStateListOf<AppInfo>() }
-        items.addAll(
-            data.appInfos
-                .asSequence()
-                .map { info ->
-                    AppInfo(
-                        info.packageName,
-                        info.lastLaunched,
-                        info.launchedCount.toLongArray()
-                    ).apply {
-                        sortValue = info.launchedCount.sum()
+        LaunchedEffect(data.appInfos) {
+            items.clear()
+            items.addAll(
+                data.appInfos
+                    .asSequence()
+                    .map { info ->
+                        AppInfo(
+                            info.packageName,
+                            info.lastLaunched,
+                            info.launchedCount.toLongArray()
+                        ).apply {
+                            sortValue = info.launchedCount.sum()
+                        }
                     }
-                }
-                .filterNot { it.appName().isBlank() }
-                .sortedBy { it.appName() }
-        )
+                    .filterNot { it.appName().isBlank() }
+                    .sortedBy { it.appName() }
+            )
+        }
 
-        val maxSortValue = items.maxOf { it.sortValue }.coerceAtLeast(1)
+        val maxSortValue = (items.maxOfOrNull { it.sortValue } ?: 0L).coerceAtLeast(1)
 
         LazyColumn {
             items(items = items) { appInfo ->

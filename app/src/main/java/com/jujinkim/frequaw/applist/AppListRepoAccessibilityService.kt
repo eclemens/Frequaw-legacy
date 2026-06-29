@@ -60,17 +60,20 @@ class AppListRepoAccessibilityService : AppListRepo {
             // remove duplicated
             apps.filter { info -> info.packageName == appInfo.packageName }
                 .takeIf { it.size >= 2 }
-                ?.forEachIndexed { index, unusedAppInfo ->
-                    if (index > 0) {
-                        // integrate two appInfo
-                        apps[0].lastLaunched = max(apps[0].lastLaunched, unusedAppInfo.lastLaunched)
-                        for (i in 0 until apps[0].launchedCountsBy30m.size) {
-                            if (i >= unusedAppInfo.launchedCountsBy30m.size) break
-                            apps[0].launchedCountsBy30m[i] =
-                                (apps[0].launchedCountsBy30m[i] + unusedAppInfo.launchedCountsBy30m[i])
-                                    .coerceAtMost(Long.MAX_VALUE)
+                ?.let { dups ->
+                    val target = dups[0]
+                    dups.forEachIndexed { index, unusedAppInfo ->
+                        if (index > 0) {
+                            // integrate two appInfo into the first matching app
+                            target.lastLaunched = max(target.lastLaunched, unusedAppInfo.lastLaunched)
+                            for (i in 0 until target.launchedCountsBy30m.size) {
+                                if (i >= unusedAppInfo.launchedCountsBy30m.size) break
+                                target.launchedCountsBy30m[i] =
+                                    (target.launchedCountsBy30m[i] + unusedAppInfo.launchedCountsBy30m[i])
+                                        .coerceAtMost(Long.MAX_VALUE)
+                            }
+                            apps.remove(unusedAppInfo)
                         }
-                        apps.remove(unusedAppInfo)
                     }
                 }
             Log.d(FrequawApp.TAG_DEBUG, "APP Updated: $packageName")
@@ -81,21 +84,27 @@ class AppListRepoAccessibilityService : AppListRepo {
         lastUpdateTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
     }
 
-    private var isWaitToSaveAppList = false
+    @Volatile private var pendingSaveApps: List<AppInfo>? = null
+    @Volatile private var isWaitToSaveAppList = false
+    @Synchronized
     override fun saveAppList(apps: List<AppInfo>) {
+        // always keep the latest snapshot so updates within the debounce window aren't lost
+        pendingSaveApps = apps
         if (isWaitToSaveAppList) return
         isWaitToSaveAppList = true
 
         Handler(Looper.getMainLooper()).postDelayed({
+            val toSave = pendingSaveApps ?: emptyList()
+            pendingSaveApps = null
+            isWaitToSaveAppList = false
             FrequawDataHelper
                 .load()
                 .apply {
                     appInfos.clear()
-                    appInfos.addAll(apps.map { it.toData() })
+                    appInfos.addAll(toSave.map { it.toData() })
                 }.run {
                     FrequawDataHelper.save(this)
                 }
-            isWaitToSaveAppList = false
             },1000  // don't save too frequently
         )
     }

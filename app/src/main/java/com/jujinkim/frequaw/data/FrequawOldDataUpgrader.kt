@@ -76,23 +76,29 @@ object FrequawOldDataUpgrader {
                     var pkgName = ""
                     var lastLaunched = 0L
                     val launchedCnt = MutableList<Long>(AppInfo.launchedCountsBy30mSize) { 0 }
-                    when (split.size) {
-                        3 -> {
-                            pkgName = split[2]
-                            lastLaunched = split[1].toLong()
-                            launchedCnt.fill((split[0].toLong() / AppInfo.launchedCountsBy30mSize.toFloat()).roundToLong())
-                        }
-                        4 -> {
-                            pkgName = split[3]
-                            lastLaunched = split[2].toLong()
-                            split[1].split(',').forEachIndexed { index, s ->
-                                launchedCnt[index] = s.toLong()
+                    try {
+                        when (split.size) {
+                            3 -> {
+                                pkgName = split[2]
+                                lastLaunched = split[1].toLong()
+                                launchedCnt.fill((split[0].toLong() / AppInfo.launchedCountsBy30mSize.toFloat()).roundToLong())
+                            }
+                            4 -> {
+                                pkgName = split[3]
+                                lastLaunched = split[2].toLong()
+                                split[1].split(',').forEachIndexed { index, s ->
+                                    if (index < launchedCnt.size) launchedCnt[index] = s.toLong()
+                                }
+                            }
+                            else -> {
+                                pkgName = split[0]
+
                             }
                         }
-                        else -> {
-                            pkgName = split[0]
-
-                        }
+                    } catch (e: Exception) {
+                        // malformed legacy record: skip it instead of crashing migration
+                        e.printStackTrace()
+                        pkgName = ""
                     }
                     FrequawAppInfoData(pkgName, lastLaunched, launchedCnt.toList())
                 }.filterNot { it.packageName.isEmpty() }
@@ -326,23 +332,29 @@ object FrequawOldDataUpgrader {
                 var pkgName = ""
                 var lastLaunched = 0L
                 val launchedCnt = MutableList<Long>(AppInfo.launchedCountsBy30mSize) { 0 }
-                when (split.size) {
-                    3 -> {
-                        pkgName = split[2]
-                        lastLaunched = split[1].toLong()
-                        launchedCnt.fill((split[0].toLong() / AppInfo.launchedCountsBy30mSize.toFloat()).roundToLong())
-                    }
-                    4 -> {
-                        pkgName = split[3]
-                        lastLaunched = split[2].toLong()
-                        split[1].split(',').forEachIndexed { index, s ->
-                            launchedCnt[index] = s.toLong()
+                try {
+                    when (split.size) {
+                        3 -> {
+                            pkgName = split[2]
+                            lastLaunched = split[1].toLong()
+                            launchedCnt.fill((split[0].toLong() / AppInfo.launchedCountsBy30mSize.toFloat()).roundToLong())
+                        }
+                        4 -> {
+                            pkgName = split[3]
+                            lastLaunched = split[2].toLong()
+                            split[1].split(',').forEachIndexed { index, s ->
+                                if (index < launchedCnt.size) launchedCnt[index] = s.toLong()
+                            }
+                        }
+                        else -> {
+                            pkgName = split[0]
+
                         }
                     }
-                    else -> {
-                        pkgName = split[0]
-
-                    }
+                } catch (e: Exception) {
+                    // malformed legacy record: skip it instead of crashing migration
+                    e.printStackTrace()
+                    pkgName = ""
                 }
                 FrequawAppInfoData(pkgName, lastLaunched, launchedCnt.toList())
             }.filterNot { it.packageName.isEmpty() }
@@ -381,6 +393,8 @@ object FrequawOldDataUpgrader {
                     _blockApps = oldWidgetSettingData.blockApps.toMutableSet(),
                     _allowApps = oldWidgetSettingData.allowApps.toMutableSet(),
                     _sortingDirection = oldWidgetSettingData.sortingDirection,
+                    _horizontalDirection = null,    // derived from _sortingDirection on access
+                    _verticalDirection = null,
                     _pinnedApps = oldWidgetSettingData.pinnedApps.toMutableSet(),
 
                     _isTitleVisible = oldWidgetSettingData.isTitleVisible,

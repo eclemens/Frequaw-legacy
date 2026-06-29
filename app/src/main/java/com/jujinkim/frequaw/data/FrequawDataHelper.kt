@@ -21,6 +21,7 @@ object FrequawDataHelper {
     private var cachedLoadedDataTimestamp: Long = 0
     private const val cachedLoadDataTtl: Long = 1000
 
+    @Synchronized
     fun save(data: FrequawData) {
         // Check is half reduce needed
         val now = System.currentTimeMillis()
@@ -34,6 +35,7 @@ object FrequawDataHelper {
         cachedLoadedDataTimestamp = 0
     }
 
+    @Synchronized
     fun saveWidgetSetting(data: FrequawWidgetSettingData) {
         val widgetId = data.widgetId
         val newData = data.copy()
@@ -43,6 +45,7 @@ object FrequawDataHelper {
         }
     }
 
+    @Synchronized
     fun eraseWidgetSetting(widgetId: Int) {
         if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) return
 
@@ -52,6 +55,7 @@ object FrequawDataHelper {
         }
     }
 
+    @Synchronized
     fun eraseAllSpecificWidgetSettings() {
         load().apply {
             val def = getWidgetSetting(AppWidgetManager.INVALID_APPWIDGET_ID)
@@ -61,6 +65,7 @@ object FrequawDataHelper {
         }
     }
 
+    @Synchronized
     fun load(): FrequawData {
         backUpPreviousValidData()
 

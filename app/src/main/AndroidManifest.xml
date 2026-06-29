@@ -37,6 +37,19 @@
                 android:resource="@xml/frequaw_widget_info" />
         </receiver>
 
+        <!-- Invalidate icon caches when packages change (install/replace/remove) -->
+        <receiver
+            android:name=".PackageChangeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_ADDED" />
+                <action android:name="android.intent.action.PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.PACKAGE_REMOVED" />
+
+                <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
+
         <!-- Screen detect service -->
         <service
             android:name=".ScreenDetectService"

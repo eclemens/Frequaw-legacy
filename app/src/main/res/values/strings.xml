@@ -39,6 +39,12 @@
     <string name="app_list_sort_direction_rt">Right Top</string>
     <string name="app_list_sort_direction_lb">Left Bottom</string>
     <string name="app_list_sort_direction_rb">Right Bottom</string>
+    <string name="app_list_sort_direction_horizontal">Horizontal direction</string>
+    <string name="app_list_sort_direction_vertical">Vertical direction</string>
+    <string name="app_list_sort_direction_ltr">Left to right</string>
+    <string name="app_list_sort_direction_rtl">Right to left</string>
+    <string name="app_list_sort_direction_ttb">Top to bottom</string>
+    <string name="app_list_sort_direction_btt">Bottom to top</string>
     <string name="app_list_show_zero_launched">Show app icons which are never launched.</string>
     <string name="app_list_show_zero_launched_desc_on">Never launched app icons are also appeared in the widget randomly.</string>
     <string name="app_list_show_zero_launched_desc_off">Never launched app icons are disappeared in the widget.</string>

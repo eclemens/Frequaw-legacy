@@ -25,11 +25,22 @@ android {
         enabled = true
     }
 
+    signingConfigs {
+        release {
+            // LOCAL TEST keystore only — not for Play Store / production
+            storeFile file('../test-release.jks')
+            storePassword 'frequaw123'
+            keyAlias 'frequawtest'
+            keyPassword 'frequaw123'
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
     }
     compileOptions {

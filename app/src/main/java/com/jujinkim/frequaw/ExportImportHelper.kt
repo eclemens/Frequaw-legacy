@@ -23,7 +23,7 @@ class ExportImportHelper(val activity: MainActivity) {
                     activity,
                     R.string.general_export_import_exported_done,
                     Toast.LENGTH_SHORT
-                )
+                ).show()
             } catch(e: Exception) {
                 Toast.makeText(
                     activity,
@@ -37,8 +37,8 @@ class ExportImportHelper(val activity: MainActivity) {
     private val activityResultOpenDoc =
         activity.registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             try {
-                val input = activity.contentResolver.openInputStream(uri!!)
-                val jsonStr = input?.reader()?.readText() ?: ""
+                val jsonStr = activity.contentResolver.openInputStream(uri!!)
+                    ?.use { it.reader().readText() } ?: ""
 
                 AlertDialog.Builder(activity)
                     .setMessage(R.string.general_export_import_setting_import_double_check)
@@ -59,7 +59,7 @@ class ExportImportHelper(val activity: MainActivity) {
                                 activity,
                                 R.string.general_export_import_imported_done,
                                 Toast.LENGTH_SHORT
-                            )
+                            ).show()
 
                             // Save original widgetSettings to the new Data
                             FrequawDataHelper.load().widgetSettings.forEach {

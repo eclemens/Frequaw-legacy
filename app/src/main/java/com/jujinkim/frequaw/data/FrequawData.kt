@@ -77,6 +77,8 @@ data class FrequawWidgetSettingData(
     @SerializedName(value = "blockApps") var _blockApps: MutableSet<String>?,
     @SerializedName(value = "allowApps") var _allowApps: MutableSet<String>?,
     @SerializedName(value = "sortingDirection") var _sortingDirection: SortingDirection?,
+    @SerializedName(value = "horizontalDirection") var _horizontalDirection: HorizontalDirection?,
+    @SerializedName(value = "verticalDirection") var _verticalDirection: VerticalDirection?,
     @SerializedName(value = "pinnedApps") var _pinnedApps: MutableSet<String>?,
 
     @SerializedName(value = "isTitleVisible") var _isTitleVisible: Boolean?,
@@ -137,6 +139,24 @@ data class FrequawWidgetSettingData(
         get() = _sortingDirection ?: SortingDirection.LeftTop
         set(value) {
             _sortingDirection = value
+        }
+    var horizontalDirection: HorizontalDirection
+        get() = _horizontalDirection ?: when (_sortingDirection) {
+            // migrate legacy corner-based setting
+            SortingDirection.RightTop, SortingDirection.RightBottom -> HorizontalDirection.RightToLeft
+            else -> HorizontalDirection.LeftToRight
+        }
+        set(value) {
+            _horizontalDirection = value
+        }
+    var verticalDirection: VerticalDirection
+        get() = _verticalDirection ?: when (_sortingDirection) {
+            // migrate legacy corner-based setting
+            SortingDirection.LeftBottom, SortingDirection.RightBottom -> VerticalDirection.BottomToTop
+            else -> VerticalDirection.TopToBottom
+        }
+        set(value) {
+            _verticalDirection = value
         }
     var pinnedApps: MutableSet<String>
         get() = _pinnedApps ?: mutableSetOf()
@@ -271,6 +291,8 @@ data class FrequawWidgetSettingData(
             _blockApps = mutableSetOf(),
             _allowApps = mutableSetOf(),
             _sortingDirection = SortingDirection.LeftTop,
+            _horizontalDirection = HorizontalDirection.LeftToRight,
+            _verticalDirection = VerticalDirection.TopToBottom,
             _pinnedApps = mutableSetOf(),
 
             _isTitleVisible = true,

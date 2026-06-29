@@ -12,6 +12,7 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
 import android.os.Build
 import android.util.Log
+import android.util.LruCache
 import android.util.TypedValue
 import android.view.Gravity
 import androidx.core.content.res.ResourcesCompat
@@ -56,7 +57,7 @@ class IconHelper(context: Context, private val widgetId: Int) {
             TypedValue.COMPLEX_UNIT_DIP, SQUARE_CORNER_RADIUS_DP, context.resources.displayMetrics
         )
 
-        iconPack = IconPack(widgetSetting.appIconPackPackage, packageManager)
+        iconPack = IconPackCache.get(widgetSetting.appIconPackPackage, packageManager)
     }
 
     @Throws(NameNotFoundException::class)
@@ -81,12 +82,12 @@ class IconHelper(context: Context, private val widgetId: Int) {
         val iconBitmap = if (baseIcon is BitmapDrawable) {
             // old icons
             if (iconType != AppIconStyle.System && isForceApplyShape) {
-                getBitmapClipped(baseIcon.toBitmap(config = Bitmap.Config.ARGB_4444), iconType)
+                getBitmapClipped(baseIcon.toBitmap(config = Bitmap.Config.ARGB_8888), iconType)
             } else {
-                baseIcon.toBitmap(config = Bitmap.Config.ARGB_4444)
+                baseIcon.toBitmap(config = Bitmap.Config.ARGB_8888)
             }
         } else if (iconType == AppIconStyle.System || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            baseIcon.toBitmap(config = Bitmap.Config.ARGB_4444)
+            baseIcon.toBitmap(config = Bitmap.Config.ARGB_8888)
         } else if (baseIcon is AdaptiveIconDrawable) {
             val drr = arrayOfNulls<Drawable>(2)
             drr[0] = baseIcon.background
@@ -98,16 +99,16 @@ class IconHelper(context: Context, private val widgetId: Int) {
                 setLayerSize(1, layerSize, layerSize)
                 //setLayerInset(1, 0, 0, 0, 0)
             }
-            val bitmap = Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_4444)
+            val bitmap = Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
             layerDrawable.setBounds(0, 0, iconSize, iconSize)
             layerDrawable.draw(canvas)
             getBitmapClipped(bitmap, iconType)
         } else {
             if (iconType != AppIconStyle.System && isForceApplyShape) {
-                getBitmapClipped(baseIcon.toBitmap(config = Bitmap.Config.ARGB_4444), iconType)
+                getBitmapClipped(baseIcon.toBitmap(config = Bitmap.Config.ARGB_8888), iconType)
             } else {
-                baseIcon.toBitmap(config = Bitmap.Config.ARGB_4444)
+                baseIcon.toBitmap(config = Bitmap.Config.ARGB_8888)
             }
         }
 
@@ -117,7 +118,7 @@ class IconHelper(context: Context, private val widgetId: Int) {
     private fun getBitmapClipped(bitmap: Bitmap, iconType: AppIconStyle) : Bitmap {
         val width = bitmap.width
         val height = bitmap.height
-        val outputBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_4444).apply { density = bitmap.density }
+        val outputBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply { density = bitmap.density }
         val path = when (iconType) {
             AppIconStyle.Circle-> circlePath(width, height)
             AppIconStyle.Square -> squarePath(width, height)
@@ -131,7 +132,9 @@ class IconHelper(context: Context, private val widgetId: Int) {
         canvas.clipPath(path)
         canvas.drawBitmap(bitmap, 0f, 0f, null)
         canvas.restore()
-        bitmap.recycle()
+        // Do NOT recycle `bitmap`: Drawable.toBitmap() can return a BitmapDrawable's
+        // shared backing bitmap (cached app icon). Recycling it crashes later renders
+        // with "Canvas: trying to use a recycled bitmap". Let GC reclaim it.
         return outputBitmap
     }
 
@@ -140,7 +143,7 @@ class IconHelper(context: Context, private val widgetId: Int) {
             addCircle(
                 width * .5f,
                 height * .5f,
-                min(width.toFloat(), height * .5f),
+                min(width, height) * .5f,
                 Path.Direction.CCW
             )
         }
@@ -171,6 +174,55 @@ class IconHelper(context: Context, private val widgetId: Int) {
         const val SQUARE_CORNER_RADIUS_DP = 8f
         const val SQUIRCLE_FACTOR = 0.125f
     }
+}
+
+/**
+ * Process-wide cache of parsed icon packs. An IconPack parses the whole appfilter.xml
+ * (thousands of entries) and decodes back/mask/front bitmaps in its constructor; that work
+ * is identical for every widget refresh of the same pack, so build it once per package.
+ */
+object IconPackCache {
+    private var cachedPackage: String? = null
+    private var cachedPack: IconPack? = null
+
+    @Synchronized
+    fun get(packageName: String, packageManager: PackageManager): IconPack {
+        val current = cachedPack
+        if (current != null && cachedPackage == packageName) return current
+        return IconPack(packageName, packageManager).also {
+            cachedPackage = packageName
+            cachedPack = it
+        }
+    }
+
+    @Synchronized
+    fun clear() {
+        cachedPackage = null
+        cachedPack = null
+    }
+}
+
+/**
+ * LRU cache of finished, ready-to-display icon bitmaps keyed by everything that affects the
+ * pixels (pack + package + style + force-clip + target size). Avoids decoding/clipping/scaling
+ * the same icon on every widget refresh. Evicted bitmaps are NOT recycled: a bitmap may still be
+ * referenced by a RemoteViews mid-update, so we let GC reclaim them instead.
+ */
+object IconBitmapCache {
+    private const val MAX_BYTES = 6 * 1024 * 1024 // ~6MB; icon bitmaps are small
+
+    private val cache = object : LruCache<String, Bitmap>(MAX_BYTES) {
+        override fun sizeOf(key: String, value: Bitmap) = value.byteCount
+    }
+
+    @Synchronized
+    fun get(key: String): Bitmap? = cache.get(key)?.takeIf { !it.isRecycled }
+
+    @Synchronized
+    fun put(key: String, bitmap: Bitmap) { cache.put(key, bitmap) }
+
+    @Synchronized
+    fun clear() = cache.evictAll()
 }
 
 class IconPack(
@@ -232,9 +284,10 @@ class IconPack(
             when (xmlPullParser.name.lowercase(Locale.getDefault())) {
                 "iconback" -> {
                     for (i in 0 until xmlPullParser.attributeCount) {
-                        if (xmlPullParser.getAttributeName(0).equals("img1")) {
+                        // iconback lists img1, img2, ... — check each attribute, not index 0
+                        if (xmlPullParser.getAttributeName(i).startsWith("img")) {
                             getDrawableFromName(xmlPullParser.getAttributeValue(i))?.let {
-                                commonBackImages.add(it.toBitmap(config = Bitmap.Config.ARGB_4444))
+                                commonBackImages.add(it.toBitmap(config = Bitmap.Config.ARGB_8888))
                             }
                         }
                     }
@@ -245,7 +298,7 @@ class IconPack(
                     if (xmlPullParser.attributeCount > 0 &&
                         xmlPullParser.getAttributeName(0).equals("img1")) {
                         val drawableName = xmlPullParser.getAttributeValue(0)
-                        commonMask = getDrawableFromName(drawableName)?.toBitmap(config = Bitmap.Config.ARGB_4444)
+                        commonMask = getDrawableFromName(drawableName)?.toBitmap(config = Bitmap.Config.ARGB_8888)
                     }
                     eventType = xmlPullParser.next()
                     continue
@@ -254,7 +307,7 @@ class IconPack(
                     if (xmlPullParser.attributeCount > 0 &&
                         xmlPullParser.getAttributeName(0).equals("img1")) {
                         val drawableName = xmlPullParser.getAttributeValue(0)
-                        commonFrontImage = getDrawableFromName(drawableName)?.toBitmap(config = Bitmap.Config.ARGB_4444)
+                        commonFrontImage = getDrawableFromName(drawableName)?.toBitmap(config = Bitmap.Config.ARGB_8888)
                     }
                     eventType = xmlPullParser.next()
                     continue
@@ -294,7 +347,7 @@ class IconPack(
         if (!isReady) return null
 
         val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
-        val componentName = launchIntent?.let { it.component.toString() } ?: return null
+        val componentName = (launchIntent?.component ?: return null).toString()
 
         var resStr = iconPackResMap[componentName]
         if (resStr.isNullOrBlank()) {
@@ -308,6 +361,7 @@ class IconPack(
             }
         }
 
+        if (resStr.isNullOrBlank()) return null
         val id = iconPackRes.getIdentifier(resStr, "drawable", this.packageName)
         if (id == 0) return null
 
@@ -329,11 +383,11 @@ class IconPack(
         val backBitmap = commonBackImages.random()
         val w = backBitmap.width
         val h = backBitmap.height
-        val outputBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_4444)
+        val outputBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(outputBitmap).apply { drawBitmap(backBitmap, 0f, 0f, null) }
 
         // app image
-        canvas.drawBitmap(drawable.toBitmap(w, h, Bitmap.Config.ARGB_4444), 0f, 0f, null)
+        canvas.drawBitmap(drawable.toBitmap(w, h, Bitmap.Config.ARGB_8888), 0f, 0f, null)
 
         // mask
         commonMask?.let { mask ->

@@ -4,6 +4,8 @@ enum class SortMode { Count, Period, Recommend, Recent }
 enum class RcmdSortMode { Balanced, Time, Count }
 enum class FilterMode { BlockList, AllowList }
 enum class SortingDirection { LeftTop, RightTop, LeftBottom, RightBottom }
+enum class HorizontalDirection { LeftToRight, RightToLeft }
+enum class VerticalDirection { TopToBottom, BottomToTop }
 enum class AppIconStyle { System, Circle, Square, RoundedSquare, Squircle }
 
 enum class Screen {

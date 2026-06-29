@@ -47,7 +47,8 @@ class WidgetModel(val widgetId: Int) {
     var iconAreaWidth = 0
     var iconAreaHeight = 0
 
-    var appSortDirection = SortingDirection.LeftTop
+    var appHorizontalDirection = HorizontalDirection.LeftToRight
+    var appVerticalDirection = VerticalDirection.TopToBottom
 
     fun initializeData(context: Context) {
         val settingData = FrequawDataHelper.load()
@@ -136,7 +137,8 @@ class WidgetModel(val widgetId: Int) {
             context.packageName)
         if (bgRes == 0) bgRes = R.drawable.widget_rounded_bg_22dp
 
-        appSortDirection = widgetData.sortingDirection
+        appHorizontalDirection = widgetData.horizontalDirection
+        appVerticalDirection = widgetData.verticalDirection
 
         appList = AppListManager.getSortedApps(widgetId)
     }
@@ -153,7 +155,7 @@ class WidgetModel(val widgetId: Int) {
             ${BuildConfig.VERSION_CODE}:
             $widgetId:
             ${widgetData.sortAppBy.ordinal}:
-            ${appSortDirection.ordinal}:
+            ${appHorizontalDirection.ordinal}${appVerticalDirection.ordinal}:
             ${widgetData.pinnedApps.size}:
             ${if (data.isProMode) 1 else 0}:
             ${if (widgetData.widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) 1 else 0}

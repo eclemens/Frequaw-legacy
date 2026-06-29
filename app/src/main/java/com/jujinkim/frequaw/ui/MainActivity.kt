@@ -14,7 +14,6 @@ import android.widget.Toast
 import androidx.activity.addCallback
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.databinding.DataBindingUtil
@@ -34,8 +33,6 @@ import kotlinx.coroutines.flow.onEach
 class MainActivity : AppCompatActivity(), FinishActivityListener {
 
     lateinit var widgetPreviewLayout: LinearLayout
-
-    private var permissionCheckDialog: AlertDialog? = null
 
     private var isFirstRun = SharedPref.getAndUpdateFirstRun()
     private var tutorialIntentLauncher: ActivityResultLauncher<Intent>? = null
@@ -170,12 +167,6 @@ class MainActivity : AppCompatActivity(), FinishActivityListener {
     override fun onResume() {
         super.onResume()
 
-        // Dismiss any permission check dialog if it is shown
-        if (permissionCheckDialog != null) {
-            permissionCheckDialog?.dismiss()
-            permissionCheckDialog = null
-        }
-
         // Message bar layout
         viewModel.updateMessageBarLayoutByChangingMode(
             FrequawDataHelper.loadWidgetSetting(viewModel.widgetId).sortAppBy
@@ -195,6 +186,7 @@ class MainActivity : AppCompatActivity(), FinishActivityListener {
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
+        if (intent == null) return
         this.intent = intent
 
         finish()

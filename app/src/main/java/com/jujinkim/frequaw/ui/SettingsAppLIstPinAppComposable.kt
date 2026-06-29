@@ -163,7 +163,7 @@ private fun ItemComposable(
         )
     }
 
-    var checkedState by remember { mutableStateOf(enabled) }
+    var checkedState by remember(enabled) { mutableStateOf(enabled) }
     Switch(
         checked = checkedState,
         onCheckedChange = {

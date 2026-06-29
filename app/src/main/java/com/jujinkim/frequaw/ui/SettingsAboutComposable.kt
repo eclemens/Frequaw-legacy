@@ -132,12 +132,15 @@ fun SettingsAboutComposable() = Column(
         modifier = Modifier.fillMaxWidth(),
         onClick = {
             val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "plain/Text"
                 putExtra(Intent.EXTRA_EMAIL, arrayOf("jujin@jujinkim.com"))
                 putExtra(Intent.EXTRA_SUBJECT, "<${context.getString(R.string.app_name_only)}>")
                 type = "message/rfc822"
             }
-            context.startActivity(intent)
+            try {
+                context.startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                e.printStackTrace()
+            }
         }
     ) {
         Text(text = stringResource(R.string.about_contact))

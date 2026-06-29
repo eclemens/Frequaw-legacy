@@ -49,6 +49,8 @@ object Utils {
 }
 
 fun LongArray.getCyclic(index: Int) : Long {
-    val idx = if (index < 0) index + this.size else index
-    return this[idx % this.size]
+    if (this.isEmpty()) return 0
+    // floorMod-style wrap handles any negative index, not just one wrap
+    val idx = ((index % this.size) + this.size) % this.size
+    return this[idx]
 }
