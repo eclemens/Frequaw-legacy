@@ -359,7 +359,7 @@ class FrequawWidget : AppWidgetProvider() {
                         val iconResize = (viewModel.iconSize * iconResizeFactor).toInt()
                         val cacheKey =
                             "${setting.appIconPackPackage}|$packageName|${iconStyle.name}|" +
-                            "${setting.isForceIconShapeClip}|$iconResize"
+                            "${setting.isForceIconShapeClip}|${setting.isThemeUnmatchedWithIconPack}|$iconResize"
                         val iconBmp = IconBitmapCache.get(cacheKey) ?: run {
                             var b = iconHelper.getAppIcon(packageName, iconStyle)
                             if (b.width > iconResize || b.height > iconResize) {

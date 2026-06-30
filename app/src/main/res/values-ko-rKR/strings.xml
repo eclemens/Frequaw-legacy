@@ -150,6 +150,7 @@
     <string name="icon_style_square">네모</string>
     <string name="icon_style_rounded_squire">둥근 모서리 네모</string>
     <string name="icon_style_apply_shape_force">모든 아이콘을 선택한 모양으로 강제로 클리핑하기.</string>
+    <string name="icon_style_theme_unmatched_with_pack">일치하는 아이콘이 없는 앱에 아이콘 팩 배경 사용</string>
     <string name="icon_style_no_icon_pack">아이콘 팩 적용 안함</string>
     <string name="battery_optimization_activity_not_found">이 기기에서 배터리 최적화 설정 액티비티를 찾을 수 없습니다. 기기의 설정 앱에서 직접 비활성화해주세요.</string>
     <string name="icon_style_squircle">스쿼클</string>

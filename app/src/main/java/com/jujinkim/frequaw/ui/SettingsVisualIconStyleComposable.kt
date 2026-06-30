@@ -35,6 +35,7 @@ fun SettingsVisualIconStyleComposable(data: FrequawData, widgetId: Int) = Column
     val widgetData = data.getWidgetSetting(widgetId)
     var selectedShape by remember { mutableStateOf(widgetData.appIconStyle) }
     var isForceShape by remember { mutableStateOf(widgetData.isForceIconShapeClip) }
+    var isThemeUnmatched by remember { mutableStateOf(widgetData.isThemeUnmatchedWithIconPack) }
     var selectedIconPkg by remember { mutableStateOf(widgetData.appIconPackPackage) }
     val iconPackList by remember { mutableStateOf(loadIconPackList()) }
 
@@ -128,6 +129,25 @@ fun SettingsVisualIconStyleComposable(data: FrequawData, widgetId: Int) = Column
             modifier = Modifier.weight(1f)
         )
     }
+
+    // Theme apps the pack has no icon for, using the pack's back plate.
+    // Only relevant when an icon pack is selected.
+    if (selectedIconPkg.isNotEmpty()) {
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Checkbox(
+                checked = isThemeUnmatched,
+                onCheckedChange = {
+                    isThemeUnmatched = it
+                    saveIconStyle(widgetData, selectedShape, isForceShape, selectedIconPkg, isThemeUnmatched)
+                }
+            )
+            Text(
+                text = stringResource(R.string.icon_style_theme_unmatched_with_pack),
+                fontSize = 14.sp,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterialApi::class)
@@ -167,11 +187,14 @@ private fun saveIconStyle(
     widgetSettingData: FrequawWidgetSettingData,
     style: AppIconStyle,
     isForceShape: Boolean,
-    iconPackPkgName: String
+    iconPackPkgName: String,
+    // defaults to the saved value so callers that don't change it preserve it
+    isThemeUnmatched: Boolean = widgetSettingData.isThemeUnmatchedWithIconPack
 ) {
     widgetSettingData.appIconStyle = style
     widgetSettingData.isForceIconShapeClip = isForceShape
     widgetSettingData.appIconPackPackage = iconPackPkgName
+    widgetSettingData.isThemeUnmatchedWithIconPack = isThemeUnmatched
 
     FrequawDataHelper.saveWidgetSetting(widgetSettingData)
 }

@@ -228,5 +228,6 @@
     <string name="icon_style_square">Square</string>
     <string name="icon_style_rounded_squire">Squire with rounded corners</string>
     <string name="icon_style_apply_shape_force">Force all icons to be clipped into the selected shape.</string>
+    <string name="icon_style_theme_unmatched_with_pack">Use the icon pack background for apps it has no icon for</string>
     <string name="icon_style_no_icon_pack">No icon pack</string>
 </resources>

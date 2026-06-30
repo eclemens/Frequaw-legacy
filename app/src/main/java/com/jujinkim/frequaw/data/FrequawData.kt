@@ -87,6 +87,7 @@ data class FrequawWidgetSettingData(
     @SerializedName(value = "appIconStyle") var _appIconStyle: AppIconStyle?,
     @SerializedName(value = "appIconPackPackage") var _appIconPackPackage: String?,
     @SerializedName(value = "isForceIconShapeClip") var _isForceIconShapeClip: Boolean?,
+    @SerializedName(value = "isThemeUnmatchedWithIconPack") var _isThemeUnmatchedWithIconPack: Boolean? = null,
     @SerializedName(value = "appIconSize") var _appIconSize: Int?,
 
     @SerializedName(value = "isAdvancedWidgetLayout") var _isAdvancedWidgetLayout: Boolean?,
@@ -193,6 +194,15 @@ data class FrequawWidgetSettingData(
         get() = _isForceIconShapeClip ?: false
         set(value) {
             _isForceIconShapeClip = value
+        }
+    // When true, apps with no icon-pack match are composited onto the pack's back plate;
+    // when false they keep their original (stock) icon, matching how launchers leave
+    // unsupported apps untouched. Defaults to true to preserve the pre-existing behavior
+    // (unmatched icons were always themed) for upgrading users.
+    var isThemeUnmatchedWithIconPack: Boolean
+        get() = _isThemeUnmatchedWithIconPack ?: true
+        set(value) {
+            _isThemeUnmatchedWithIconPack = value
         }
     var appIconSize: Int
         get() = _appIconSize ?: 45
@@ -301,6 +311,7 @@ data class FrequawWidgetSettingData(
             _appIconStyle = AppIconStyle.System,
             _appIconPackPackage = "",
             _isForceIconShapeClip = false,
+            _isThemeUnmatchedWithIconPack = true,
             _appIconSize = 45,
 
             _isAdvancedWidgetLayout = false,

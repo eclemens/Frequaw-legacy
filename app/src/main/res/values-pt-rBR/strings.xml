@@ -156,6 +156,7 @@
     <string name="icon_style_square">Quadrado</string>
     <string name="icon_style_rounded_squire">Quadrado com cantos arredondados</string>
     <string name="icon_style_apply_shape_force">Forçar todos os ícones a serem cortados na forma selecionada.</string>
+    <string name="icon_style_theme_unmatched_with_pack">Usar o fundo do pacote de ícones para apps sem ícone correspondente</string>
     <string name="icon_style_no_icon_pack">Ícones originais</string>
     <string name="visual_title_text">Texto do título</string>
     <string name="visual_title_text_desc">Defina o texto exibido na área de título.</string>

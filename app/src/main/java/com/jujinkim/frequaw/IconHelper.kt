@@ -39,6 +39,7 @@ class IconHelper(context: Context, private val widgetId: Int) {
     private var cornerRadius: Float
 
     private val isForceApplyShape = widgetSetting.isForceIconShapeClip
+    private val isThemeUnmatchedWithIconPack = widgetSetting.isThemeUnmatchedWithIconPack
 
     private val iconPack: IconPack
 
@@ -64,8 +65,14 @@ class IconHelper(context: Context, private val widgetId: Int) {
     fun getAppIcon(packageName: String, type: AppIconStyle = AppIconStyle.System): Bitmap {
         try {
             val drawable = if (iconPack.isReady) {
-                iconPack.getAppIconDrawable(packageName) ?:
-                iconPack.applyIconPackTheme(packageManager.getApplicationIcon(packageName))
+                iconPack.getAppIconDrawable(packageName)
+                    ?: if (isThemeUnmatchedWithIconPack) {
+                        // wrap the stock icon in the pack's back plate
+                        iconPack.applyIconPackTheme(packageManager.getApplicationIcon(packageName))
+                    } else {
+                        // leave unsupported apps on their original icon, like a launcher does
+                        packageManager.getApplicationIcon(packageName)
+                    }
             } else {
                 packageManager.getApplicationIcon(packageName)
             }
@@ -380,14 +387,38 @@ class IconPack(
             return drawable
         }
 
+        // Pick one of the pack's back plates at random. This is intentionally non-deterministic:
+        // a given app may show a different plate between widget refreshes. Kept as-is to match
+        // legacy behavior; switch to a package-name hash if a stable plate per app is ever wanted.
         val backBitmap = commonBackImages.random()
         val w = backBitmap.width
         val h = backBitmap.height
         val outputBitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(outputBitmap).apply { drawBitmap(backBitmap, 0f, 0f, null) }
 
-        // app image
-        canvas.drawBitmap(drawable.toBitmap(w, h, Bitmap.Config.ARGB_8888), 0f, 0f, null)
+        // app image: a raw app icon (esp. adaptive) only paints its content in the inner safe zone
+        // of its own canvas, so drawing it at full plate size left the logo small and top-biased
+        // with the iconback showing around it. Trim to the actual content, scale to the pack's
+        // scale factor, and center it on the back plate.
+        val appBitmap = foregroundBitmap(drawable)
+        val content = contentBounds(appBitmap)
+        val srcW = content.width()
+        val srcH = content.height()
+        if (srcW > 0 && srcH > 0) {
+            // contain-fit within (plate * factor), preserving aspect, then center.
+            // Guard the factor: a missing/zero `scale` in appfilter.xml would otherwise scale the
+            // logo to nothing.
+            val factor = if (commonFactor > 0f) commonFactor else 1f
+            val targetW = w * factor
+            val targetH = h * factor
+            val scale = min(targetW / srcW, targetH / srcH)
+            val dstW = srcW * scale
+            val dstH = srcH * scale
+            val dstLeft = (w - dstW) * 0.5f
+            val dstTop = (h - dstH) * 0.5f
+            val dst = RectF(dstLeft, dstTop, dstLeft + dstW, dstTop + dstH)
+            canvas.drawBitmap(appBitmap, content, dst, Paint(Paint.FILTER_BITMAP_FLAG))
+        }
 
         // mask
         commonMask?.let { mask ->
@@ -400,5 +431,64 @@ class IconPack(
         }
 
         return outputBitmap.toDrawable(FrequawApp.appContext.resources)
+    }
+
+    /**
+     * Rasterizes the part of [drawable] we want on the pack's back plate. For an adaptive icon we
+     * take only the FOREGROUND layer: the pack already supplies a background, so the adaptive
+     * background (a flat color/gradient) would just cover the plate. For everything else we
+     * rasterize the whole drawable.
+     */
+    private fun foregroundBitmap(drawable: Drawable): Bitmap {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && drawable is AdaptiveIconDrawable) {
+            val fg = drawable.foreground
+            if (fg != null) {
+                val fw = fg.intrinsicWidth.takeIf { it > 0 } ?: drawable.intrinsicWidth
+                val fh = fg.intrinsicHeight.takeIf { it > 0 } ?: drawable.intrinsicHeight
+                if (fw > 0 && fh > 0) {
+                    val bmp = Bitmap.createBitmap(fw, fh, Bitmap.Config.ARGB_8888)
+                    fg.setBounds(0, 0, fw, fh)
+                    fg.draw(Canvas(bmp))
+                    return bmp
+                }
+            }
+        }
+        return drawable.toBitmap(config = Bitmap.Config.ARGB_8888)
+    }
+
+    /**
+     * Returns the bounding [Rect] of [bitmap]'s non-transparent pixels (the real icon content),
+     * ignoring the transparent safe-zone margin a raw/adaptive app icon carries. Falls back to the
+     * full bitmap rect when it is fully transparent.
+     */
+    private fun contentBounds(bitmap: Bitmap): Rect {
+        val w = bitmap.width
+        val h = bitmap.height
+        if (w == 0 || h == 0) return Rect(0, 0, w, h)
+
+        val pixels = IntArray(w * h)
+        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+
+        var left = w; var top = h; var right = -1; var bottom = -1
+        for (y in 0 until h) {
+            val row = y * w
+            for (x in 0 until w) {
+                if ((pixels[row + x] ushr 24) > CONTENT_ALPHA_THRESHOLD) {
+                    if (x < left) left = x
+                    if (x > right) right = x
+                    if (y < top) top = y
+                    if (y > bottom) bottom = y
+                }
+            }
+        }
+        if (right < left || bottom < top) return Rect(0, 0, w, h) // fully transparent
+        return Rect(left, top, right + 1, bottom + 1)
+    }
+
+    companion object {
+        // Minimum alpha (0-255) a pixel must have to count as icon content when measuring
+        // bounds. Set above typical anti-aliased edges and drop shadows so the solid logo,
+        // not its shadow, drives sizing and centering.
+        private const val CONTENT_ALPHA_THRESHOLD = 48
     }
 }
