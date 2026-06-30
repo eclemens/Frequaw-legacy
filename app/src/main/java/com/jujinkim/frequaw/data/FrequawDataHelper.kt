@@ -17,9 +17,14 @@ object FrequawDataHelper {
     const val PREF_KEY = "FREQUAW_DATA"
     const val BACKUP_PREVIOUS_NORMAL = "_BACKUP_PREVIOUS_NORMAL"
 
-    private var cachedLoadedData: FrequawData = load()
+    // Reused across all (de)serialization. Constructing a Gson builds reflective type adapters,
+    // which is wasteful to repeat on every save/load in this long-running widget process.
+    // Declared before cachedLoadedData: object props init in order, and load() uses gson.
+    private val gson = Gson()
+
     private var cachedLoadedDataTimestamp: Long = 0
     private const val cachedLoadDataTtl: Long = 1000
+    private var cachedLoadedData: FrequawData = load()
 
     @Synchronized
     fun save(data: FrequawData) {
@@ -30,7 +35,7 @@ object FrequawDataHelper {
             data.reduceLaunchedCounts()
         }
 
-        val jsonStr = Gson().toJson(data)
+        val jsonStr = gson.toJson(data)
         getPref().edit().putString(PREF_KEY, jsonStr).apply()
         cachedLoadedDataTimestamp = 0
     }
@@ -67,14 +72,16 @@ object FrequawDataHelper {
 
     @Synchronized
     fun load(): FrequawData {
-        backUpPreviousValidData()
-
         // get cachedLoadedData if it is not too old
         if (System.currentTimeMillis() - cachedLoadedDataTimestamp < cachedLoadDataTtl) {
             return cachedLoadedData
         }
 
+        // Only on an actual disk read: parse + back up the freshly-read valid blob. Running the
+        // backup on every load() (incl. cache hits) read+rewrote the whole blob each call,
+        // negating the TTL cache and amplifying flash writes.
         val jsonStr = getPref().getString(PREF_KEY, null)
+        backUpPreviousValidData(jsonStr)
         val newLoadedData = gsonFromJsonAndFitVersion(jsonStr)
         return newLoadedData.also {
             cachedLoadedData = it
@@ -99,7 +106,7 @@ object FrequawDataHelper {
             Log.i(FrequawApp.TAG_DEBUG, "Obfuscated v1 data detected. Trying to restore...")
             FrequawOldDataUpgrader.restoreFromV1ObfuscatedData(jsonStr)
         } else {
-            Gson().fromJson(jsonStr, FrequawData::class.java)
+            gson.fromJson(jsonStr, FrequawData::class.java)
         }
 
         if (data == null) {
@@ -134,8 +141,8 @@ object FrequawDataHelper {
     }
 
     // This method is for the emergency case when the data is corrupted or unable to read.
-    private fun backUpPreviousValidData() {
-        val jsonStr = getPref().getString(PREF_KEY, null)
+    // Takes the already-read blob so it doesn't re-read prefs; called only on a real disk load.
+    private fun backUpPreviousValidData(jsonStr: String?) {
         if (jsonStr != null && jsonStr.length > 100) // 100 is just a random number. It should be enough to check if it is not empty and valid.
             getPref().edit().putString(PREF_KEY + BACKUP_PREVIOUS_NORMAL, jsonStr).apply()
     }

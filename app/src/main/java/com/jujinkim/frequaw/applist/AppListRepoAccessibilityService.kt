@@ -84,19 +84,29 @@ class AppListRepoAccessibilityService : AppListRepo {
         lastUpdateTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
     }
 
-    @Volatile private var pendingSaveApps: List<AppInfo>? = null
-    @Volatile private var isWaitToSaveAppList = false
-    @Synchronized
+    // Guards pendingSaveApps + isWaitToSaveAppList. Both the enqueue path and the delayed
+    // runnable read-modify-write these, so both must hold the same monitor; a dedicated lock
+    // (not the public instance) keeps the critical sections atomic on either thread.
+    private val saveLock = Any()
+    private var pendingSaveApps: List<AppInfo>? = null
+    private var isWaitToSaveAppList = false
+
     override fun saveAppList(apps: List<AppInfo>) {
-        // always keep the latest snapshot so updates within the debounce window aren't lost
-        pendingSaveApps = apps
-        if (isWaitToSaveAppList) return
-        isWaitToSaveAppList = true
+        synchronized(saveLock) {
+            // always keep the latest snapshot so updates within the debounce window aren't lost
+            pendingSaveApps = apps
+            if (isWaitToSaveAppList) return
+            isWaitToSaveAppList = true
+        }
 
         Handler(Looper.getMainLooper()).postDelayed({
-            val toSave = pendingSaveApps ?: emptyList()
-            pendingSaveApps = null
-            isWaitToSaveAppList = false
+            val toSave: List<AppInfo>
+            synchronized(saveLock) {
+                toSave = pendingSaveApps ?: emptyList()
+                pendingSaveApps = null
+                isWaitToSaveAppList = false
+            }
+            // Disk I/O outside the lock: only the flag/snapshot handoff needs guarding.
             FrequawDataHelper
                 .load()
                 .apply {
