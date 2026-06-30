@@ -12,14 +12,13 @@
     <ImageView
         android:id="@+id/iv_appIcon"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:scaleType="fitCenter"
-        android:adjustViewBounds="true"/>
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:scaleType="fitCenter"/>
     <TextView
         android:id="@+id/tv_appName"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:ellipsize="end"
         android:gravity="center_horizontal|bottom"

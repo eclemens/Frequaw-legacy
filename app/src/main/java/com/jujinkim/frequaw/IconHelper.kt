@@ -7,7 +7,6 @@ import android.content.pm.PackageManager.NameNotFoundException
 import android.content.res.Resources
 import android.graphics.*
 import android.graphics.drawable.AdaptiveIconDrawable
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
 import android.os.Build
@@ -64,20 +63,22 @@ class IconHelper(context: Context, private val widgetId: Int) {
     @Throws(NameNotFoundException::class)
     fun getAppIcon(packageName: String, type: AppIconStyle = AppIconStyle.System): Bitmap {
         try {
-            val drawable = if (iconPack.isReady) {
-                iconPack.getAppIconDrawable(packageName)
-                    ?: if (isThemeUnmatchedWithIconPack) {
-                        // wrap the stock icon in the pack's back plate
-                        iconPack.applyIconPackTheme(packageManager.getApplicationIcon(packageName))
-                    } else {
-                        // leave unsupported apps on their original icon, like a launcher does
-                        packageManager.getApplicationIcon(packageName)
-                    }
-            } else {
-                packageManager.getApplicationIcon(packageName)
+            if (iconPack.isReady) {
+                val matched = iconPack.getAppIconDrawable(packageName)
+                if (matched != null) return getClippedIcon(matched, type)
+
+                val stockIcon = packageManager.getApplicationIcon(packageName)
+                return if (isThemeUnmatchedWithIconPack) {
+                    // wrap the stock icon in the pack's back plate
+                    getClippedIcon(iconPack.applyIconPackTheme(stockIcon), type)
+                } else {
+                    // No pack background, but still normalize the logo to fill the tile so it
+                    // matches the size of the pack's own icons (which are full-bleed art).
+                    filledIcon(stockIcon, type)
+                }
             }
 
-            return getClippedIcon(drawable, type)
+            return getClippedIcon(packageManager.getApplicationIcon(packageName), type)
 
         } catch (e: NameNotFoundException) {
             e.printStackTrace()
@@ -85,43 +86,60 @@ class IconHelper(context: Context, private val widgetId: Int) {
         }
     }
 
-    fun getClippedIcon(baseIcon: Drawable, iconType: AppIconStyle) : Bitmap {
-        val iconBitmap = if (baseIcon is BitmapDrawable) {
-            // old icons
-            if (iconType != AppIconStyle.System && isForceApplyShape) {
-                getBitmapClipped(baseIcon.toBitmap(config = Bitmap.Config.ARGB_8888), iconType)
-            } else {
-                baseIcon.toBitmap(config = Bitmap.Config.ARGB_8888)
-            }
-        } else if (iconType == AppIconStyle.System || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            baseIcon.toBitmap(config = Bitmap.Config.ARGB_8888)
-        } else if (baseIcon is AdaptiveIconDrawable) {
-            val drr = arrayOfNulls<Drawable>(2)
-            drr[0] = baseIcon.background
-            drr[1] = baseIcon.foreground
-            val layerDrawable = LayerDrawable(drr).apply {
-                setLayerGravity(0, Gravity.CENTER)
-                setLayerGravity(1, Gravity.CENTER)
-                setLayerSize(0, layerSize, layerSize)
-                setLayerSize(1, layerSize, layerSize)
-                //setLayerInset(1, 0, 0, 0, 0)
-            }
-            val bitmap = Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
-            layerDrawable.setBounds(0, 0, iconSize, iconSize)
-            layerDrawable.draw(canvas)
-            getBitmapClipped(bitmap, iconType)
-        } else {
-            if (iconType != AppIconStyle.System && isForceApplyShape) {
-                getBitmapClipped(baseIcon.toBitmap(config = Bitmap.Config.ARGB_8888), iconType)
-            } else {
-                baseIcon.toBitmap(config = Bitmap.Config.ARGB_8888)
-            }
-        }
-
-        return iconBitmap
+    /**
+     * Builds an icon whose logo fills the tile: takes the drawable's foreground content, trims its
+     * transparent margin, and scales it to cover the canvas, centered. Used for apps an icon pack
+     * has no entry for, so they are the same visual size as the pack's full-bleed icons instead of
+     * a small safe-zone logo. The selected shape is applied unless the System style is selected.
+     */
+    private fun filledIcon(drawable: Drawable, iconType: AppIconStyle): Bitmap {
+        val filled = drawable.toForegroundBitmap().coverFilled()
+        return if (iconType != AppIconStyle.System) getBitmapClipped(filled, iconType) else filled
     }
 
+    fun getClippedIcon(baseIcon: Drawable, iconType: AppIconStyle) : Bitmap {
+        val isAdaptive = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && baseIcon is AdaptiveIconDrawable
+
+        // Build a full-bleed bitmap: adaptive icons are cropped to their safe zone (108dp -> 72dp)
+        // the way a launcher does; everything else is rasterized as-is. Both are then content-filled
+        // so a padded icon (e.g. a matched pack icon with transparent margins) is the same visual
+        // size as the others. coverFilled is a no-op for already full-bleed art.
+        val bitmap = if (isAdaptive) {
+            renderAdaptiveBitmap(baseIcon as AdaptiveIconDrawable).coverFilled()
+        } else {
+            baseIcon.toBitmap(config = Bitmap.Config.ARGB_8888).coverFilled()
+        }
+
+        // Clip adaptive icons (arbitrary outlines) to the chosen shape always; clip legacy / pack
+        // icons only when the user forces it. The System style is never clipped.
+        val clipToShape = iconType != AppIconStyle.System && (isAdaptive || isForceApplyShape)
+        return if (clipToShape) getBitmapClipped(bitmap, iconType) else bitmap
+    }
+
+    /**
+     * Rasterizes an [AdaptiveIconDrawable] cropped to its safe zone: both layers are drawn at the
+     * full 108dp [layerSize] but centered inside the smaller [iconSize] (72dp) canvas, so the 18%
+     * bleed margin is cropped away and the visible content fills the bitmap, matching launcher
+     * presentation.
+     */
+    private fun renderAdaptiveBitmap(baseIcon: AdaptiveIconDrawable): Bitmap {
+        val drr = arrayOfNulls<Drawable>(2)
+        drr[0] = baseIcon.background
+        drr[1] = baseIcon.foreground
+        val layerDrawable = LayerDrawable(drr).apply {
+            setLayerGravity(0, Gravity.CENTER)
+            setLayerGravity(1, Gravity.CENTER)
+            setLayerSize(0, layerSize, layerSize)
+            setLayerSize(1, layerSize, layerSize)
+        }
+        val bitmap = Bitmap.createBitmap(iconSize, iconSize, Bitmap.Config.ARGB_8888)
+        layerDrawable.setBounds(0, 0, iconSize, iconSize)
+        layerDrawable.draw(Canvas(bitmap))
+        return bitmap
+    }
+
+    // Clips [bitmap] to the shape for [iconType]. Callers pass a content-filled bitmap (see
+    // coverFilled), so the shape is fully covered with no flat/empty edge from a transparent margin.
     private fun getBitmapClipped(bitmap: Bitmap, iconType: AppIconStyle) : Bitmap {
         val width = bitmap.width
         val height = bitmap.height
@@ -400,8 +418,8 @@ class IconPack(
         // of its own canvas, so drawing it at full plate size left the logo small and top-biased
         // with the iconback showing around it. Trim to the actual content, scale to the pack's
         // scale factor, and center it on the back plate.
-        val appBitmap = foregroundBitmap(drawable)
-        val content = contentBounds(appBitmap)
+        val appBitmap = drawable.toForegroundBitmap()
+        val content = appBitmap.contentBounds()
         val srcW = content.width()
         val srcH = content.height()
         if (srcW > 0 && srcH > 0) {
@@ -432,63 +450,84 @@ class IconPack(
 
         return outputBitmap.toDrawable(FrequawApp.appContext.resources)
     }
+}
 
-    /**
-     * Rasterizes the part of [drawable] we want on the pack's back plate. For an adaptive icon we
-     * take only the FOREGROUND layer: the pack already supplies a background, so the adaptive
-     * background (a flat color/gradient) would just cover the plate. For everything else we
-     * rasterize the whole drawable.
-     */
-    private fun foregroundBitmap(drawable: Drawable): Bitmap {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && drawable is AdaptiveIconDrawable) {
-            val fg = drawable.foreground
-            if (fg != null) {
-                val fw = fg.intrinsicWidth.takeIf { it > 0 } ?: drawable.intrinsicWidth
-                val fh = fg.intrinsicHeight.takeIf { it > 0 } ?: drawable.intrinsicHeight
-                if (fw > 0 && fh > 0) {
-                    val bmp = Bitmap.createBitmap(fw, fh, Bitmap.Config.ARGB_8888)
-                    fg.setBounds(0, 0, fw, fh)
-                    fg.draw(Canvas(bmp))
-                    return bmp
-                }
+// Minimum alpha (0-255) a pixel must have to count as icon content when measuring bounds. Set
+// high enough to exclude anti-aliased edges and adaptive-icon drop shadows (which are typically
+// well under ~35% opacity) so the solid logo, not its shadow, drives sizing and centering. Too
+// low and the shadow gets included, biasing the content box downward (a circle clip then looks
+// cropped at the bottom); too high and faint-but-real logo pixels get trimmed.
+private const val CONTENT_ALPHA_THRESHOLD = 96
+
+/**
+ * Rasterizes the meaningful part of this drawable. For an adaptive icon only the FOREGROUND layer
+ * is drawn (its logo); the flat background is dropped so callers can place the logo on their own
+ * surface or scale it to fill. Everything else is rasterized whole.
+ */
+private fun Drawable.toForegroundBitmap(): Bitmap {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && this is AdaptiveIconDrawable) {
+        val fg = foreground
+        if (fg != null) {
+            val fw = fg.intrinsicWidth.takeIf { it > 0 } ?: intrinsicWidth
+            val fh = fg.intrinsicHeight.takeIf { it > 0 } ?: intrinsicHeight
+            if (fw > 0 && fh > 0) {
+                val bmp = Bitmap.createBitmap(fw, fh, Bitmap.Config.ARGB_8888)
+                fg.setBounds(0, 0, fw, fh)
+                fg.draw(Canvas(bmp))
+                return bmp
             }
         }
-        return drawable.toBitmap(config = Bitmap.Config.ARGB_8888)
     }
+    return toBitmap(config = Bitmap.Config.ARGB_8888)
+}
 
-    /**
-     * Returns the bounding [Rect] of [bitmap]'s non-transparent pixels (the real icon content),
-     * ignoring the transparent safe-zone margin a raw/adaptive app icon carries. Falls back to the
-     * full bitmap rect when it is fully transparent.
-     */
-    private fun contentBounds(bitmap: Bitmap): Rect {
-        val w = bitmap.width
-        val h = bitmap.height
-        if (w == 0 || h == 0) return Rect(0, 0, w, h)
+/**
+ * Returns the bounding [Rect] of this bitmap's non-transparent pixels (the real icon content),
+ * ignoring the transparent safe-zone margin a raw/adaptive app icon carries. Falls back to the
+ * full bitmap rect when it is fully transparent.
+ */
+private fun Bitmap.contentBounds(): Rect {
+    if (width == 0 || height == 0) return Rect(0, 0, width, height)
 
-        val pixels = IntArray(w * h)
-        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
+    val pixels = IntArray(width * height)
+    getPixels(pixels, 0, width, 0, 0, width, height)
 
-        var left = w; var top = h; var right = -1; var bottom = -1
-        for (y in 0 until h) {
-            val row = y * w
-            for (x in 0 until w) {
-                if ((pixels[row + x] ushr 24) > CONTENT_ALPHA_THRESHOLD) {
-                    if (x < left) left = x
-                    if (x > right) right = x
-                    if (y < top) top = y
-                    if (y > bottom) bottom = y
-                }
+    var left = width; var top = height; var right = -1; var bottom = -1
+    for (y in 0 until height) {
+        val row = y * width
+        for (x in 0 until width) {
+            if ((pixels[row + x] ushr 24) > CONTENT_ALPHA_THRESHOLD) {
+                if (x < left) left = x
+                if (x > right) right = x
+                if (y < top) top = y
+                if (y > bottom) bottom = y
             }
         }
-        if (right < left || bottom < top) return Rect(0, 0, w, h) // fully transparent
-        return Rect(left, top, right + 1, bottom + 1)
     }
+    if (right < left || bottom < top) return Rect(0, 0, width, height) // fully transparent
+    return Rect(left, top, right + 1, bottom + 1)
+}
 
-    companion object {
-        // Minimum alpha (0-255) a pixel must have to count as icon content when measuring
-        // bounds. Set above typical anti-aliased edges and drop shadows so the solid logo,
-        // not its shadow, drives sizing and centering.
-        private const val CONTENT_ALPHA_THRESHOLD = 48
-    }
+/**
+ * Returns a copy of this bitmap with its opaque content scaled to cover the full bounds (centered,
+ * overflow cropped), so a following shape clip is fully covered instead of leaving a flat/empty
+ * edge where the source had a transparent margin. Returns the original unchanged when the content
+ * already fills the bounds (or the bitmap is fully transparent), so full-bleed icons are untouched.
+ */
+private fun Bitmap.coverFilled(): Bitmap {
+    val bounds = contentBounds()
+    val cw = bounds.width()
+    val ch = bounds.height()
+    if (cw <= 0 || ch <= 0) return this
+    if (bounds.left == 0 && bounds.top == 0 && cw == width && ch == height) return this // already full
+
+    val out = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply { density = this@coverFilled.density }
+    val scale = maxOf(width.toFloat() / cw, height.toFloat() / ch)
+    val dstW = cw * scale
+    val dstH = ch * scale
+    val dstLeft = (width - dstW) * 0.5f
+    val dstTop = (height - dstH) * 0.5f
+    val dst = RectF(dstLeft, dstTop, dstLeft + dstW, dstTop + dstH)
+    Canvas(out).drawBitmap(this, bounds, dst, Paint(Paint.FILTER_BITMAP_FLAG))
+    return out
 }
