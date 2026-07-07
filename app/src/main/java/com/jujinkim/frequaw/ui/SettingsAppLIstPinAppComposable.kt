@@ -25,9 +25,13 @@ import com.jujinkim.frequaw.data.FrequawDataHelper
 import com.jujinkim.frequaw.model.AppFilter
 import com.jujinkim.frequaw.model.init
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.withContext
 
+@OptIn(FlowPreview::class)
 @Composable
 fun SettingsAppListPinAppComposable(data: FrequawData, widgetId: Int) = Box {
     var isInfoDialogOpened by rememberSaveable { mutableStateOf(false) }
@@ -52,44 +56,52 @@ fun SettingsAppListPinAppComposable(data: FrequawData, widgetId: Int) = Box {
 
         PinAppInfoComposable { isInfoDialogOpened = true }
 
-        LaunchedEffect(searchStr) {
-            withContext(Dispatchers.Default) {
-                isLoadingProgressShown = true
+        // Rebuild the list when the (debounced) search string changes. collectLatest aborts
+        // an in-flight build as soon as a newer search arrives, and the list is only mutated
+        // on the main thread after the background build completes, so a cancelled build can
+        // never write stale (duplicate) results.
+        LaunchedEffect(Unit) {
+            snapshotFlow { searchStr }
+                .debounce { query -> if (query.isBlank()) 0L else 300L }
+                .collectLatest { query ->
+                    isLoadingProgressShown = true
 
-                val appLists = AppListManager.getSortedApps(widgetId)
-                    .asSequence()
-                    .map { appInfo -> appInfo.packageName
+                    val newItems = withContext(Dispatchers.Default) {
+                        val appLists = AppListManager.getSortedApps(widgetId)
+                            .map { appInfo -> appInfo.packageName }
+                            .toMutableList()
+
+                        appLists.addAll(
+                            AppListManager.getInstalledApps()
+                                .asSequence()
+                                .filter { pkg -> appLists.find { it == pkg } == null }
+                        )
+
+                        appLists
+                            .asSequence()
+                            .filterNot { pkg -> pkg == FrequawApp.appContext.packageName }
+                            .map { pkg ->
+                                ensureActive()
+                                AppFilter(
+                                    pkg,
+                                    widgetData.pinnedApps.contains(pkg)
+                                ).init()
+                            }
+                            .filter {
+                                query.isEmpty() ||
+                                        it.packageName.contains(query, true) ||
+                                        it.appName.contains(query, true)
+                            }
+                            .sortedBy { appFilter -> appFilter.appName }
+                            .sortedByDescending { if (widgetData.pinnedApps.contains(it.packageName)) 1 else 0 }
+                            .toList()
                     }
-                    .toMutableList()
 
-                appLists.addAll(
-                    AppListManager.getInstalledApps()
-                        .asSequence()
-                        .filter { pkg -> appLists.find { it == pkg } == null }
-                )
+                    items.clear()
+                    items.addAll(newItems)
 
-                val finalAppList = appLists
-                    .asSequence()
-                    .filterNot { pkg -> pkg == FrequawApp.appContext.packageName }
-                    .map { pkg -> AppFilter(
-                            pkg,
-                            widgetData.pinnedApps.contains(pkg)
-                        ).init()
-                    }
-                    .filter {
-                        searchStr.isEmpty() ||
-                                it.packageName.contains(searchStr, true) ||
-                                it.appName.contains(searchStr, true)
-                    }
-                    .sortedBy { appFilter -> appFilter.appName }
-                    .sortedByDescending { if (widgetData.pinnedApps.contains(it.packageName)) 1 else 0 }
-                    .toMutableList()
-
-                items.clear()
-                items.addAll(finalAppList)
-
-                isLoadingProgressShown = false
-            }
+                    isLoadingProgressShown = false
+                }
         }
 
         LazyColumn {

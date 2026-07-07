@@ -27,8 +27,13 @@ import com.jujinkim.frequaw.data.FrequawDataHelper
 import com.jujinkim.frequaw.model.AppFilter
 import com.jujinkim.frequaw.model.init
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.withContext
 
+@OptIn(FlowPreview::class)
 @Composable
 fun SettingsAppListFilterAppComposable(data: FrequawData, widgetId: Int) = Column {
     val widgetData = data.getWidgetSetting(widgetId)
@@ -105,42 +110,53 @@ fun SettingsAppListFilterAppComposable(data: FrequawData, widgetId: Int) = Colum
         modifier = Modifier.padding(8.dp)
     )
 
-    // Convert the list to AppFilter list with isFilter=true and sort them by app name
-    LaunchedEffect(searchStr, isBlockMode) {
-        withContext(Dispatchers.Default) {
-            isLoadingProgressShown = true
-            items.clear()
+    // Rebuild the list when the mode changes or the (debounced) search string changes.
+    // collectLatest aborts an in-flight build as soon as a newer search arrives, and the
+    // list is only mutated on the main thread after the background build completes, so a
+    // cancelled build can never write stale (duplicate) results.
+    LaunchedEffect(isBlockMode) {
+        snapshotFlow { searchStr }
+            .debounce { query -> if (query.isBlank()) 0L else 300L }
+            .collectLatest { query ->
+                isLoadingProgressShown = true
 
-            var appLists = (if (isBlockMode) widgetData.blockApps else widgetData.allowApps)
-                .asSequence()
-                .map { filterPackageName -> AppFilter(filterPackageName, true).init() }
-                .sortedBy { appFilter -> appFilter.appName }
-                .toMutableList()
+                val newItems = withContext(Dispatchers.Default) {
+                    // Convert the list to AppFilter list with isFilter=true and sort them by app name
+                    val appLists = (if (isBlockMode) widgetData.blockApps else widgetData.allowApps)
+                        .map { filterPackageName ->
+                            ensureActive()
+                            AppFilter(filterPackageName, true).init()
+                        }
+                        .sortedBy { appFilter -> appFilter.appName }
+                        .toMutableList()
 
-            // Add all installed apps with isFilter=false into the list
-            appLists.addAll(
-                AppListManager.getInstalledApps()
-                    .asSequence()
-                    .filter { pkg -> appLists.find { it.packageName == pkg } == null }
-                    .map { filterPackageName -> AppFilter(filterPackageName, false).init() }
-                    .sortedBy { appFilter -> appFilter.appName }
-            )
+                    // Add all installed apps with isFilter=false into the list
+                    appLists.addAll(
+                        AppListManager.getInstalledApps()
+                            .filter { pkg -> appLists.find { it.packageName == pkg } == null }
+                            .map { filterPackageName ->
+                                ensureActive()
+                                AppFilter(filterPackageName, false).init()
+                            }
+                            .sortedBy { appFilter -> appFilter.appName }
+                    )
 
-            // Remove some apps(Frequaw app, Search keyword) from the list and return it
-            appLists = appLists
-                .asSequence()
-                .filterNot { appFilter -> appFilter.packageName == FrequawApp.appContext.packageName }
-                .filter { appFilter ->
-                    if (searchStr.isBlank()) return@filter true
-                    return@filter appFilter.appName.contains(searchStr, true) ||
-                            appFilter.packageName.contains(searchStr, true)
+                    // Remove some apps(Frequaw app, Search keyword) from the list and return it
+                    appLists
+                        .asSequence()
+                        .filterNot { appFilter -> appFilter.packageName == FrequawApp.appContext.packageName }
+                        .filter { appFilter ->
+                            if (query.isBlank()) return@filter true
+                            return@filter appFilter.appName.contains(query, true) ||
+                                    appFilter.packageName.contains(query, true)
+                        }
+                        .toList()
                 }
-                .toMutableList()
 
-            items.addAll(appLists)
-
-            isLoadingProgressShown = false
-        }
+                items.clear()
+                items.addAll(newItems)
+                isLoadingProgressShown = false
+            }
     }
 
     // items list
